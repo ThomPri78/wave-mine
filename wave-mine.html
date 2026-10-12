@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wave Mine</title>
+<meta name="theme-color" content="#2c2622">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Wave Mine">
+<meta name="description" content="A deduction puzzle: send waves into a mine and find five hidden gems.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg: #efe6d4; --ink: #251f19; --muted: #6e6356;
+  --panel: #e4d9c4; --panel2: #d4c6ab; --line: #c5b79b;
+  --board: #2c2622; --rock: #3a312b; --grid: rgba(242,177,52,.22); --lamp: #f2b134;
+  --lab: #eadfc8; --labInk: #241f1a;
+  --btn: #251f19; --btnInk: #f6efe1; --ok: #2f8f44; --bad: #c9362f;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141110; --ink: #efe6d6; --muted: #a2958a;
+    --panel: #1f1a17; --panel2: #2b2420; --line: #3a322c;
+    --lab: #d9cdb5; --labInk: #1c1814;
+    --btn: #efe6d6; --btnInk: #1a1512; --ok: #4fbf66; --bad: #e0574f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141110; --ink: #efe6d6; --muted: #a2958a;
+  --panel: #1f1a17; --panel2: #2b2420; --line: #3a322c;
+  --lab: #d9cdb5; --labInk: #1c1814;
+  --btn: #efe6d6; --btnInk: #1a1512; --ok: #4fbf66; --bad: #e0574f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: 'Barlow Semi Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  font-size: 17px; line-height: 1.35; -webkit-text-size-adjust: 100%;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+button:focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
+#board *:focus { outline: none; }
+.app { max-width: 480px; margin: 0 auto; padding: 10px 12px 32px; }
+
+header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
+.sub { color: var(--muted); font-size: 14px; margin: 0; }
+.hbtns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.hbtns button { background: none; border: 1.5px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; font-weight: 600; }
+header > div:first-child { min-width: 0; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 15px; color: var(--muted); margin: 4px 0 8px; }
+.stats span { white-space: nowrap; }
+.stats b { color: var(--ink); font-size: 18px; margin-left: 4px; }
+
+#board { width: 100%; height: auto; display: block; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+#board text { font-family: inherit; pointer-events: none; }
+#board .lab circle.ring { fill: var(--lab); stroke: none; }
+#board .lab text { fill: var(--labInk); font-size: 0.46px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+#board .lab.pending circle.ring { stroke: var(--lamp); stroke-width: 0.12px; animation: pulse 1s ease-in-out infinite; }
+#board .lab.known.dark text { fill: #f6efe1; }
+#board .lab.known.clear circle.ring { fill: none; stroke: var(--muted); stroke-width: 0.07px; stroke-dasharray: 0.12 0.1; }
+#board .lab .n { font-size: 0.26px; font-weight: 700; fill: var(--ink); }
+#board .lab .nbg { fill: var(--bg); }
+#board .cell { fill: transparent; }
+#board .cell.pending { fill: var(--lamp); fill-opacity: .35; }
+#board .beam { fill: none; stroke-width: 0.12px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#board .gem { stroke: rgba(0,0,0,.45); stroke-width: 0.04px; stroke-linejoin: round; }
+#board .facet { fill: #fff; fill-opacity: .22; pointer-events: none; }
+#board .guess .gem { fill-opacity: .75; }
+#board .guess .gem.sel { stroke: var(--lamp); stroke-width: 0.1px; }
+#board .guess.ghost .gem { fill-opacity: 0; stroke: #fff; stroke-width: 0.06px; stroke-dasharray: 0.15 0.1; }
+#board .guess.ghost .facet { display: none; }
+#board .ask { pointer-events: none; }
+@keyframes pulse { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .25; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { #board .lab.pending circle.ring, #board .beam { animation: none !important; stroke-dashoffset: 0 !important; } }
+
+.panel {
+  min-height: 74px; margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+  background: var(--panel); display: flex; align-items: center; gap: 12px;
+}
+.chip { width: 40px; height: 40px; border-radius: 50%; flex: none; border: 2px solid rgba(0,0,0,.25); }
+.chip.clear { background: none; border: 2px dashed var(--muted); }
+.panel .txt { flex: 1; min-width: 0; }
+.panel .txt b { font-size: 20px; }
+.panel .small { color: var(--muted); font-size: 14px; }
+.panel .act { display: flex; flex-direction: column; gap: 6px; }
+.btn { background: var(--btn); color: var(--btnInk); border: 0; border-radius: 9px; padding: 9px 14px; font-weight: 600; font-size: 16px; }
+.btn.quiet { background: none; color: var(--ink); border: 1.5px solid var(--line); }
+.btn[disabled] { opacity: .45; cursor: default; }
+
+.seg { display: flex; margin-top: 10px; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { flex: 1; background: none; border: 0; padding: 10px 4px; font-weight: 600; font-size: 16px; }
+.seg button[aria-pressed="true"] { background: var(--btn); color: var(--btnInk); }
+
+.solve { margin-top: 10px; display: none; }
+.solve.on { display: block; }
+.palette { display: flex; gap: 8px; margin-bottom: 8px; }
+.palette button { flex: 1; aspect-ratio: 1; background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12px; color: var(--muted); }
+.palette button svg { width: 34px; height: 34px; }
+.palette button[aria-pressed="true"] { border-color: var(--lamp); }
+.palette button.placed { background: var(--panel2); }
+.row { display: flex; gap: 8px; }
+.row .btn { flex: 1; padding: 10px 6px; }
+
+.log { margin-top: 14px; }
+.log h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+.log ol { list-style: none; margin: 0; padding: 0; }
+.log li { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.log .dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.3); flex: none; }
+.log .dot.clear { border: 1.5px dashed var(--muted); }
+.log .num { color: var(--muted); width: 22px; flex: none; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
+.overlay.on { display: flex; }
+.card { background: var(--bg); color: var(--ink); border-radius: 16px; padding: 20px; max-width: 420px; width: 100%; max-height: 85vh; overflow: auto; }
+.card h2 { margin: 0 0 8px; font-size: 24px; }
+.card p { margin: 0 0 10px; }
+.card ul { padding-left: 18px; margin: 0 0 10px; }
+.card li { margin-bottom: 4px; }
+.card .row { margin-top: 14px; }
+.swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 15px; margin-bottom: 10px; }
+.swatches span { display: inline-flex; align-items: center; gap: 6px; }
+.swatches i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); display: inline-block; }
+.field { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); font: inherit; }
+.field:focus-visible { outline: 3px solid var(--lamp); outline-offset: 1px; }
+.sharebox { background: var(--panel); border-radius: 9px; padding: 8px 10px; font-size: 14px; word-break: break-word; margin-top: 10px; }
+.lb { list-style: none; margin: 0 0 6px; padding: 0; max-height: 40vh; overflow: auto; }
+.lb li { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.lb .rank { width: 22px; flex: none; color: var(--muted); }
+.lb .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb .t { font-weight: 700; flex: none; }
+.lb .meta { color: var(--muted); font-size: 13px; flex: none; }
+.lb li.me { color: var(--lamp); }
+.card .seg { margin: 0 0 10px; }
+.card .row + .row { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Wave Mine</h1>
+      <p class="sub">Find the five hidden gems</p>
+    </div>
+    <div class="hbtns">
+      <button id="helpBtn">Help</button>
+      <button id="scoresBtn">Scores</button>
+      <button id="newBtn">New</button>
+    </div>
+  </header>
+  <div class="stats">
+    <span>Turns<b id="turns">0</b></span>
+    <span>Checks left<b id="attempts">2</b></span>
+    <span id="bestWrap" hidden>Best<b id="best"></b></span>
+    <span>Mine<b id="mine"></b></span>
+  </div>
+
+  <svg id="board" viewBox="0 0 12 10" role="application" aria-label="Mine board"></svg>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="seg" role="tablist">
+    <button id="mScan" aria-pressed="true">Send wave</button>
+    <button id="mAsk" aria-pressed="false">Ask a cell</button>
+    <button id="mSolve" aria-pressed="false">Place gems</button>
+  </div>
+
+  <div class="solve" id="solve">
+    <div class="palette" id="palette"></div>
+    <div class="row">
+      <button class="btn quiet" id="rotBtn">Rotate</button>
+      <button class="btn quiet" id="flipBtn">Flip</button>
+      <button class="btn quiet" id="remBtn">Remove</button>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="checkBtn">Check answer</button></div>
+  </div>
+
+  <div class="log">
+    <h2 id="logTitle">Your questions</h2>
+    <ol id="log"></ol>
+  </div>
+  <button class="btn quiet" id="giveBtn" style="width:100%;margin-top:18px">Give up and show the mine</button>
+</div>
+
+<div class="overlay" id="endOverlay">
+  <div class="card">
+    <h2 id="endTitle"></h2>
+    <p id="endText"></p>
+    <div id="saveBox" hidden>
+      <input class="field" id="nameField" maxlength="16" placeholder="Your name" autocomplete="off" aria-label="Your name">
+      <div class="row" style="margin-top:8px"><button class="btn" id="saveBtn">Save score</button></div>
+    </div>
+    <p class="sub" id="saveMsg"></p>
+    <div class="row">
+      <button class="btn quiet" id="lookBtn">Look at the mine</button>
+      <button class="btn quiet" id="shareBtn">Share this mine</button>
+    </div>
+    <div class="row"><button class="btn" id="againBtn">Random mine</button></div>
+    <div class="sharebox" id="shareOut" hidden></div>
+  </div>
+</div>
+
+<div class="overlay" id="newOverlay">
+  <div class="card">
+    <h2>New mine</h2>
+    <p class="sub" id="newNote"></p>
+    <div class="row"><button class="btn" id="randomBtn">Random mine</button></div>
+    <p style="margin-top:14px">Or play a mine number from a friend. Same number, same mine.</p>
+    <input class="field" id="seedField" inputmode="numeric" placeholder="Mine number" aria-label="Mine number">
+    <div class="row"><button class="btn quiet" id="newCancel">Cancel</button><button class="btn" id="playSeedBtn">Play this mine</button></div>
+    <p class="sub" id="seedMsg"></p>
+  </div>
+</div>
+
+<div class="overlay" id="scoresOverlay">
+  <div class="card">
+    <h2>Scores on this device</h2>
+    <div class="seg"><button id="lbAll" aria-pressed="true">All mines</button><button id="lbThis" aria-pressed="false">This mine</button></div>
+    <ol class="lb" id="lbList"></ol>
+    <p class="sub" id="lbEmpty">No scores yet. Solve a mine and save your score.</p>
+    <div class="row"><button class="btn quiet" id="lbClear">Clear scores</button><button class="btn" id="lbClose">Close</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="confirmOverlay">
+  <div class="card">
+    <h2 id="confirmTitle"></h2>
+    <div class="row">
+      <button class="btn quiet" id="confirmNo">Cancel</button>
+      <button class="btn" id="confirmYes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay">
+  <div class="card">
+    <h2>How to play</h2>
+    <p>Five gems are hidden in a 10 × 8 mine: one red, one blue, one yellow and two white. Each gem is a tangram shape. Find the position and the orientation of each gem.</p>
+    <ul>
+      <li>Tap a letter or a number on the edge to send a wave. The wave moves in a straight line. It bounces off gems. It turns 90° on a diagonal face. It goes straight back on a flat face.</li>
+      <li>You get the exit point and the exit colour. The colour tells you which gem colours the wave touched, in any order.</li>
+      <li>Ask a cell to learn its colour. This costs one turn.</li>
+      <li>Place all five gems and check your answer. You have two answers. Two wrong answers end the game.</li>
+    </ul>
+    <div class="swatches" id="swatches"></div>
+    <p class="sub">Placement rules: gem corners sit on grid points. Two gems never share an edge. Every gem is visible from at least one edge.</p>
+    <div class="row"><button class="btn" id="helpClose">Close</button></div>
+  </div>
+</div>
+
+<script>
+const Engine = (() => {
+  const W = 10, H = 8;
+  const SIDES = ['T', 'R', 'B', 'L'];
+  const DIR = { T: [0, -1], R: [1, 0], B: [0, 1], L: [-1, 0] };
+  const OPP = { T: 'B', R: 'L', B: 'T', L: 'R' };
+  const SAMPLE = { T: [0.5, 0.2], R: [0.8, 0.5], B: [0.5, 0.8], L: [0.2, 0.5] };
+
+  // Grid-aligned tangram shapes (unit = one cell). Screen coordinates: y grows downward.
+  const SHAPES = {
+    largeTri: [[0, 0], [2, 0], [0, 2]],
+    medTri:   [[0, 0], [2, 0], [1, 1]],
+    smallTri: [[0, 0], [1, 0], [0, 1]],
+    para:     [[0, 0], [1, 0], [2, 1], [1, 1]],
+    square:   [[0, 0], [1, 0], [1, 1], [0, 1]],
+  };
+
+  const PIECES = [
+    { id: 'R',  color: 'R', name: 'Red',    shape: 'largeTri' },
+    { id: 'B',  color: 'B', name: 'Blue',   shape: 'medTri' },
+    { id: 'Y',  color: 'Y', name: 'Yellow', shape: 'para' },
+    { id: 'W1', color: 'W', name: 'White',  shape: 'smallTri' },
+    { id: 'W2', color: 'W', name: 'White',  shape: 'smallTri' },
+  ];
+
+  const GEM_HEX = { R: '#e3342f', B: '#2e6ff2', Y: '#f7c948', W: '#f7f3ea' };
+
+  const MIX = {
+    '': 'Transparent', B: 'Blue', R: 'Red', W: 'White', Y: 'Yellow',
+    BR: 'Purple', BW: 'Sky blue', BY: 'Green', RW: 'Pink', RY: 'Orange', WY: 'Lemon',
+    BRW: 'Light purple', BRY: 'Black', BWY: 'Light green', RWY: 'Light orange', BRWY: 'Gray',
+  };
+  const HEX = {
+    Transparent: null, Blue: '#2e6ff2', Red: '#e3342f', White: '#f7f3ea', Yellow: '#f7c948',
+    Purple: '#8b3fd9', 'Sky blue': '#74c7f2', Green: '#37a84d', Pink: '#f48fb1', Orange: '#f28c28',
+    Lemon: '#eef07a', 'Light purple': '#c8a2f0', Black: '#1b1b1b', 'Light green': '#a9e58a',
+    'Light orange': '#f8cfa0', Gray: '#9a9a9a',
+  };
+
+  // ---------- geometry ----------
+  function pointInPoly(px, py, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  function cellsOfPoly(poly) {
+    const xs = poly.map(p => p[0]), ys = poly.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const cells = [];
+    for (let y = minY; y < maxY; y++) for (let x = minX; x < maxX; x++) {
+      const solid = SIDES.filter(s => pointInPoly(x + SAMPLE[s][0], y + SAMPLE[s][1], poly));
+      if (solid.length === 0) continue;
+      if (solid.length === 4) cells.push({ x, y, kind: 'full', solid: 'TRBL' });
+      else if (solid.length === 2) cells.push({ x, y, kind: 'half', solid: solid.join('') });
+      else throw new Error('shape does not decompose into cells');
+    }
+    return { cells, w: maxX - minX, h: maxY - minY };
+  }
+
+  function normalize(poly) {
+    const minX = Math.min(...poly.map(p => p[0])), minY = Math.min(...poly.map(p => p[1]));
+    return poly.map(([x, y]) => [x - minX, y - minY]);
+  }
+  const rot = poly => normalize(poly.map(([x, y]) => [-y, x]));
+  const flip = poly => normalize(poly.map(([x, y]) => [-x, y]));
+  const cellsKey = cells => cells.map(k => `${k.x},${k.y},${k.kind},${k.solid}`).sort().join('|');
+
+  function orientations(shapeKey) {
+    const list = [], index = new Map();
+    const add = poly => {
+      const c = cellsOfPoly(poly), key = cellsKey(c.cells);
+      if (!index.has(key)) { index.set(key, list.length); list.push({ poly, key, ...c }); }
+    };
+    let p = normalize(SHAPES[shapeKey]);
+    for (let f = 0; f < 2; f++) {
+      let q = p;
+      for (let r = 0; r < 4; r++) { add(q); q = rot(q); }
+      p = flip(p);
+    }
+    for (const o of list) {
+      o.r = index.get(cellsKey(cellsOfPoly(rot(o.poly)).cells));
+      o.f = index.get(cellsKey(cellsOfPoly(flip(o.poly)).cells));
+    }
+    return list;
+  }
+  const ORIENTS = {};
+  for (const k in SHAPES) ORIENTS[k] = orientations(k);
+
+  // ---------- board ----------
+  const cellKey = (x, y) => x + ',' + y;
+
+  function placeCells(pl) {
+    const o = ORIENTS[PIECES[pl.piece].shape][pl.orient];
+    return o.cells.map(c => ({ x: c.x + pl.x, y: c.y + pl.y, kind: c.kind, solid: c.solid }));
+  }
+  function placePoly(pl) {
+    const o = ORIENTS[PIECES[pl.piece].shape][pl.orient];
+    return o.poly.map(([x, y]) => [x + pl.x, y + pl.y]);
+  }
+
+  function segKeys(c) {
+    const k = [];
+    for (const s of c.solid) {
+      if (s === 'T') k.push(`h${c.x},${c.y}`);
+      if (s === 'B') k.push(`h${c.x},${c.y + 1}`);
+      if (s === 'L') k.push(`v${c.x},${c.y}`);
+      if (s === 'R') k.push(`v${c.x + 1},${c.y}`);
+    }
+    return k;
+  }
+  function boundarySegs(cells) {
+    const n = new Map();
+    for (const c of cells) for (const k of segKeys(c)) n.set(k, (n.get(k) || 0) + 1);
+    return [...n].filter(e => e[1] === 1).map(e => e[0]);
+  }
+
+  // Returns Map cellKey -> {piece, kind, solid}, or null when pieces overlap or leave the grid.
+  function buildBoard(placements) {
+    const board = new Map();
+    for (let i = 0; i < placements.length; i++) {
+      const pl = placements[i];
+      if (!pl) continue;
+      for (const c of placeCells(pl)) {
+        if (c.x < 0 || c.y < 0 || c.x >= W || c.y >= H) return null;
+        const k = cellKey(c.x, c.y);
+        if (board.has(k)) return null;
+        board.set(k, { piece: i, kind: c.kind, solid: c.solid });
+      }
+    }
+    return board;
+  }
+
+  function edgesTouch(placements) {
+    const owner = new Map();
+    for (let i = 0; i < placements.length; i++) {
+      if (!placements[i]) continue;
+      for (const k of boundarySegs(placeCells(placements[i]))) {
+        if (owner.has(k) && owner.get(k) !== i) return true;
+        owner.set(k, i);
+      }
+    }
+    return false;
+  }
+
+  // ---------- entries ----------
+  const ENTRIES = [];
+  for (let c = 0; c < W; c++) ENTRIES.push({ id: ENTRIES.length, label: String(c + 1), side: 'T', x: c, y: 0, dx: 0, dy: 1 });
+  for (let r = 0; r < H; r++) ENTRIES.push({ id: ENTRIES.length, label: String(11 + r), side: 'R', x: W - 1, y: r, dx: -1, dy: 0 });
+  for (let r = 0; r < H; r++) ENTRIES.push({ id: ENTRIES.length, label: 'ABCDEFGH'[r], side: 'L', x: 0, y: r, dx: 1, dy: 0 });
+  for (let c = 0; c < W; c++) ENTRIES.push({ id: ENTRIES.length, label: 'IJKLMNOPQR'[c], side: 'B', x: c, y: H - 1, dx: 0, dy: -1 });
+
+  function exitEntry(x, y) {
+    if (y < 0) return ENTRIES.find(e => e.side === 'T' && e.x === x);
+    if (y >= H) return ENTRIES.find(e => e.side === 'B' && e.x === x);
+    if (x < 0) return ENTRIES.find(e => e.side === 'L' && e.y === y);
+    return ENTRIES.find(e => e.side === 'R' && e.y === y);
+  }
+  function boundaryPoint(x, y, side) {
+    if (side === 'T') return [x + 0.5, y];
+    if (side === 'B') return [x + 0.5, y + 1];
+    if (side === 'L') return [x, y + 0.5];
+    return [x + 1, y + 0.5];
+  }
+  const dirName = (dx, dy) => dy === 1 ? 'B' : dy === -1 ? 'T' : dx === 1 ? 'R' : 'L';
+
+  function allVisible(board, n) {
+    const seen = new Set();
+    for (const e of ENTRIES) {
+      let x = e.x, y = e.y;
+      while (x >= 0 && y >= 0 && x < W && y < H) {
+        const c = board.get(cellKey(x, y));
+        if (c) { seen.add(c.piece); break; }
+        x += e.dx; y += e.dy;
+      }
+    }
+    return seen.size === n;
+  }
+
+  // ---------- beam ----------
+  function fire(board, entryId) {
+    const e = ENTRIES[entryId];
+    let cx = e.x, cy = e.y, dx = e.dx, dy = e.dy;
+    const colors = new Set(), pieces = new Set();
+    const path = [boundaryPoint(e.x, e.y, e.side)];
+    for (let steps = 0; steps < 4000; steps++) {
+      if (cx < 0 || cy < 0 || cx >= W || cy >= H) {
+        const ex = exitEntry(cx, cy);
+        path.push(boundaryPoint(ex.x, ex.y, ex.side));
+        const name = MIX[[...colors].sort().join('')];
+        return { entry: entryId, exit: ex.id, colors, pieces, name, hex: HEX[name], path: dedupe(path) };
+      }
+      const cell = board.get(cellKey(cx, cy));
+      if (!cell) { path.push([cx + 0.5, cy + 0.5]); cx += dx; cy += dy; continue; }
+      const enterSide = OPP[dirName(dx, dy)];
+      colors.add(PIECES[cell.piece].color);
+      pieces.add(cell.piece);
+      if (cell.kind === 'full' || cell.solid.includes(enterSide)) {
+        path.push(boundaryPoint(cx, cy, enterSide));
+        cx -= dx; cy -= dy; dx = -dx; dy = -dy;
+        continue;
+      }
+      path.push([cx + 0.5, cy + 0.5]);
+      const open = SIDES.find(s => !cell.solid.includes(s) && s !== enterSide);
+      [dx, dy] = DIR[open];
+      cx += dx; cy += dy;
+    }
+    throw new Error('beam did not exit');
+  }
+  function dedupe(path) {
+    const out = [];
+    for (const p of path) {
+      const q = out[out.length - 1];
+      if (!q || q[0] !== p[0] || q[1] !== p[1]) out.push(p);
+    }
+    return out;
+  }
+
+  // ---------- generator ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function mirrorEqual(cellsA, cellsB, axis) {
+    if (cellsA.length !== cellsB.length) return false;
+    const swap = axis === 'v' ? { L: 'R', R: 'L', T: 'T', B: 'B' } : { T: 'B', B: 'T', L: 'L', R: 'R' };
+    const S = axis === 'v'
+      ? Math.min(...cellsA.map(c => c.x)) + Math.max(...cellsB.map(c => c.x))
+      : Math.min(...cellsA.map(c => c.y)) + Math.max(...cellsB.map(c => c.y));
+    const refl = cellsA.map(c => ({
+      x: axis === 'v' ? S - c.x : c.x,
+      y: axis === 'h' ? S - c.y : c.y,
+      kind: c.kind,
+      solid: SIDES.filter(s => [...c.solid].map(t => swap[t]).includes(s)).join(''),
+    }));
+    return cellsKey(refl) === cellsKey(cellsB);
+  }
+  function whitesSymmetric(placements) {
+    const whites = placements.filter(p => PIECES[p.piece].color === 'W');
+    if (whites.length !== 2) return false;
+    const a = placeCells(whites[0]), b = placeCells(whites[1]);
+    return mirrorEqual(a, b, 'v') || mirrorEqual(a, b, 'h');
+  }
+
+  function randomLayout(seed) {
+    const rnd = mulberry32(seed);
+    for (let attempt = 0; attempt < 20000; attempt++) {
+      const placements = [];
+      let ok = true;
+      for (let i = 0; i < PIECES.length && ok; i++) {
+        const ors = ORIENTS[PIECES[i].shape];
+        let placed = false;
+        for (let t = 0; t < 60 && !placed; t++) {
+          const oi = Math.floor(rnd() * ors.length), o = ors[oi];
+          const pl = { piece: i, orient: oi, x: Math.floor(rnd() * (W - o.w + 1)), y: Math.floor(rnd() * (H - o.h + 1)) };
+          const trial = placements.concat([pl]);
+          if (buildBoard(trial) && !edgesTouch(trial)) { placements.push(pl); placed = true; }
+        }
+        if (!placed) ok = false;
+      }
+      if (!ok) continue;
+      const board = buildBoard(placements);
+      if (!allVisible(board, PIECES.length)) continue;
+      if (whitesSymmetric(placements)) continue;
+      return placements;
+    }
+    throw new Error('no legal layout found');
+  }
+
+  function canonical(placements) {
+    return placements.filter(Boolean)
+      .map(pl => PIECES[pl.piece].color + ':' + cellsKey(placeCells(pl)))
+      .sort().join('/');
+  }
+
+  return {
+    W, H, SIDES, SHAPES, PIECES, ORIENTS, ENTRIES, MIX, HEX, GEM_HEX,
+    cellKey, placeCells, placePoly, buildBoard, edgesTouch, allVisible, fire, randomLayout, canonical, whitesSymmetric,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = Engine;
+
+</script>
+<script>
+(() => {
+  const E = Engine;
+  const W = E.W, H = E.H, OX = 1, OY = 1;
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+  const svg = $('board');
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- helpers ----------
+  const isDark = hex => {
+    if (!hex) return false;
+    const n = parseInt(hex.slice(1), 16);
+    const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+  };
+  const cellName = (x, y) => `${x + 1}${'ABCDEFGH'[y]}`;
+  const polyPts = poly => poly.map(([x, y]) => `${x + OX},${y + OY}`).join(' ');
+  const facetOf = poly => {
+    const cx = poly.reduce((s, p) => s + p[0], 0) / poly.length, cy = poly.reduce((s, p) => s + p[1], 0) / poly.length;
+    return poly.map(([x, y]) => [cx + (x - cx) * 0.55, cy + (y - cy) * 0.55]);
+  };
+  function drawGem(parent, poly, color, cls) {
+    const g = el('g', {}, parent);
+    el('polygon', { class: 'gem' + (cls ? ' ' + cls : ''), points: polyPts(poly), fill: E.GEM_HEX[color] }, g);
+    el('polygon', { class: 'facet', points: polyPts(facetOf(poly)) }, g);
+    return g;
+  }
+  function shapeIcon(pieceIdx, orient) {
+    const o = E.ORIENTS[E.PIECES[pieceIdx].shape][orient || 0];
+    const pts = o.poly.map(([x, y]) => `${x},${y}`).join(' ');
+    const fpts = facetOf(o.poly).map(([x, y]) => `${x},${y}`).join(' ');
+    const m = Math.max(o.w, o.h);
+    const dx = (m - o.w) / 2, dy = (m - o.h) / 2;
+    return `<svg viewBox="${-0.1 - dx} ${-0.1 - dy} ${m + 0.2} ${m + 0.2}" aria-hidden="true"><polygon points="${pts}" fill="${E.GEM_HEX[E.PIECES[pieceIdx].color]}" stroke="rgba(0,0,0,.45)" stroke-width="0.05"/><polygon points="${fpts}" fill="#fff" fill-opacity=".22"/></svg>`;
+  }
+
+  // ---------- static board ----------
+  const layers = {};
+  function buildBoard() {
+    svg.innerHTML = '';
+    const defs = el('defs', {}, svg);
+    const grad = el('linearGradient', { id: 'rock', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    el('stop', { offset: 0, 'stop-color': '#3a312b' }, grad);
+    el('stop', { offset: 1, 'stop-color': '#241f1b' }, grad);
+    el('rect', { x: OX, y: OY, width: W, height: H, rx: 0.12, fill: 'url(#rock)' }, svg);
+    const grid = el('g', { stroke: 'rgba(242,177,52,.22)', 'stroke-width': 0.025 }, svg);
+    for (let x = 1; x < W; x++) el('line', { x1: OX + x, y1: OY, x2: OX + x, y2: OY + H }, grid);
+    for (let y = 1; y < H; y++) el('line', { x1: OX, y1: OY + y, x2: OX + W, y2: OY + y }, grid);
+    el('rect', { x: OX, y: OY, width: W, height: H, rx: 0.12, fill: 'none', stroke: 'rgba(242,177,52,.5)', 'stroke-width': 0.05 }, svg);
+
+    layers.solution = el('g', { class: 'solution' }, svg);
+    layers.asks = el('g', { class: 'ask' }, svg);
+    layers.cells = el('g', {}, svg);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const r = el('rect', { class: 'cell', x: OX + x, y: OY + y, width: 1, height: 1, 'data-x': x, 'data-y': y }, layers.cells);
+      r.addEventListener('click', () => tapCell(x, y));
+    }
+    layers.guess = el('g', { class: 'guess' }, svg);
+    layers.beam = el('g', {}, svg);
+    layers.labels = el('g', {}, svg);
+    for (const e of E.ENTRIES) {
+      const [cx, cy] = labelPos(e);
+      const g = el('g', { class: 'lab', 'data-id': e.id, transform: `translate(${cx} ${cy})` }, layers.labels);
+      el('rect', { x: -0.5, y: -0.5, width: 1, height: 1, fill: 'transparent' }, g);
+      el('circle', { class: 'ring', r: 0.4 }, g);
+      el('text', {}, g).textContent = e.label;
+      g.addEventListener('click', () => tapLabel(e.id));
+    }
+  }
+  function labelPos(e) {
+    if (e.side === 'T') return [OX + e.x + 0.5, 0.5];
+    if (e.side === 'B') return [OX + e.x + 0.5, OY + H + 0.5];
+    if (e.side === 'L') return [0.5, OY + e.y + 0.5];
+    return [OX + W + 0.5, OY + e.y + 0.5];
+  }
+
+  // ---------- scores (this device only) ----------
+  const LB_KEY = 'wavemine-scores', NAME_KEY = 'wavemine-name';
+  function loadScores() {
+    try { const a = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function saveScores(a) {
+    try { localStorage.setItem(LB_KEY, JSON.stringify(a.slice(0, 200))); return true; } catch (e) { return false; }
+  }
+  const sortScores = a => a.slice().sort((p, q) => p.turns - q.turns || p.date - q.date);
+  function bestTurns() { const a = loadScores(); return a.length ? Math.min(...a.map(x => x.turns)) : null; }
+  const randomSeed = () => 100000 + Math.floor(Math.random() * 900000);
+
+  // ---------- state ----------
+  let S = null;
+  function newGame(seed) {
+    S = {
+      seed, solution: E.randomLayout(seed), probes: [], known: new Map(), asks: new Map(),
+      turns: 0, attempts: 2, mode: 'scan', over: false, won: false, revealed: false,
+      guess: E.PIECES.map(() => null), sel: null, pendingEntry: null, pendingCell: null,
+      last: null, note: '', hint: '', beam: null,
+    };
+    S.board = E.buildBoard(S.solution);
+    S.saved = false;
+    try { if (window.top === window && /^https?:$/.test(location.protocol)) history.replaceState(null, '', '#mine=' + seed); } catch (e) { /* ignore */ }
+    $('endOverlay').classList.remove('on');
+    $('newOverlay').classList.remove('on');
+    renderAll();
+  }
+
+  // ---------- actions ----------
+  function tapLabel(id) {
+    if (S.revealed) {
+      const r = E.fire(S.board, id);
+      S.beam = r; S.last = { kind: 'wave', entry: id, exit: r.exit, name: r.name, hex: r.hex, free: true };
+      S.note = 'The full path is shown on the board.'; S.hint = '';
+      renderPanel(); renderBeam(); return;
+    }
+    if (S.over) return;
+    S.pendingCell = null;
+    const known = S.known.get(id);
+    if (known) {
+      S.pendingEntry = null;
+      S.last = { ...known, free: true, from: id };
+      S.note = `You already know this from question ${known.n}. No turn used.`; S.hint = '';
+      renderPanel(); renderLabels(); renderCells(); return;
+    }
+    if (S.pendingEntry === id) { fireFrom(id); return; }
+    S.pendingEntry = id; S.note = ''; S.hint = '';
+    renderPanel(); renderLabels(); renderCells();
+  }
+  function fireFrom(id) {
+    const r = E.fire(S.board, id);
+    S.turns++;
+    const p = { n: S.probes.length + 1, kind: 'wave', entry: id, exit: r.exit, name: r.name, hex: r.hex };
+    S.probes.push(p);
+    S.known.set(id, p); S.known.set(r.exit, p);
+    S.pendingEntry = null; S.last = { ...p, from: id }; S.note = ''; S.hint = '';
+    renderAll();
+  }
+  function tapCell(x, y) {
+    const key = E.cellKey(x, y);
+    if (S.mode === 'solve' && !S.over) {
+      if (S.sel === null) {
+        const hit = guessAt(x, y);
+        if (hit !== null) { S.sel = hit; S.hint = ''; renderGuess(); renderPalette(); renderPanel(); }
+        else { S.hint = 'Choose a gem below first, then tap a cell.'; renderPanel(); }
+        return;
+      }
+      const cur = S.guess[S.sel];
+      const orient = cur ? cur.orient : 0;
+      const o = E.ORIENTS[E.PIECES[S.sel].shape][orient];
+      S.guess[S.sel] = { piece: S.sel, orient, x: Math.min(x, W - o.w), y: Math.min(y, H - o.h) };
+      S.hint = '';
+      renderGuess(); renderPalette(); renderPanel();
+      return;
+    }
+    if (S.mode === 'ask' && !S.over) {
+      S.pendingEntry = null;
+      const known = S.asks.get(key);
+      if (known) { S.pendingCell = null; S.last = { ...known, free: true }; S.note = `You already asked this in question ${known.n}. No turn used.`; S.hint = ''; renderPanel(); renderLabels(); renderCells(); return; }
+      if (S.pendingCell === key) { askCell(x, y); return; }
+      S.pendingCell = key; S.note = ''; S.hint = '';
+      renderPanel(); renderLabels(); renderCells();
+      return;
+    }
+    if (S.revealed) return;
+    S.hint = 'Tap a letter or a number on the edge to send a wave.';
+    renderPanel();
+  }
+  function askCell(x, y) {
+    const c = S.board.get(E.cellKey(x, y));
+    S.turns++;
+    const p = { n: S.probes.length + 1, kind: 'ask', x, y, name: c ? E.PIECES[c.piece].name : null, hex: c ? E.GEM_HEX[E.PIECES[c.piece].color] : null };
+    S.probes.push(p);
+    S.asks.set(E.cellKey(x, y), p);
+    S.pendingCell = null; S.last = p; S.note = ''; S.hint = '';
+    renderAll();
+  }
+  function guessAt(x, y) {
+    for (let i = 0; i < S.guess.length; i++) {
+      const g = S.guess[i];
+      if (g && E.placeCells(g).some(c => c.x === x && c.y === y)) return i;
+    }
+    return null;
+  }
+  function setMode(m) {
+    S.mode = m; S.pendingEntry = null; S.pendingCell = null; S.hint = '';
+    if (m !== 'solve') S.sel = null;
+    renderAll();
+  }
+  function selectPiece(i) {
+    S.sel = (S.sel === i) ? null : i;
+    S.hint = '';
+    renderGuess(); renderPalette(); renderPanel();
+  }
+  function transformSel(kind) {
+    if (S.sel === null || !S.guess[S.sel]) { S.hint = 'Place the gem on the board first.'; renderPanel(); return; }
+    const g = S.guess[S.sel];
+    const o = E.ORIENTS[E.PIECES[g.piece].shape][g.orient];
+    g.orient = kind === 'r' ? o.r : o.f;
+    const o2 = E.ORIENTS[E.PIECES[g.piece].shape][g.orient];
+    g.x = Math.min(g.x, W - o2.w); g.y = Math.min(g.y, H - o2.h);
+    renderGuess(); renderPalette();
+  }
+  function removeSel() {
+    if (S.sel === null) return;
+    S.guess[S.sel] = null;
+    renderGuess(); renderPalette(); renderPanel();
+  }
+  function checkAnswer() {
+    if (S.over) return;
+    if (S.guess.some(g => !g)) { S.hint = 'Place all five gems before you check.'; renderPanel(); return; }
+    if (!E.buildBoard(S.guess)) { S.hint = 'Two gems overlap. Move one of them.'; renderPanel(); return; }
+    if (E.canonical(S.guess) === E.canonical(S.solution)) { endGame(true); return; }
+    S.attempts--;
+    if (S.attempts <= 0) { endGame(false); return; }
+    S.hint = 'That is not the layout. One answer left.';
+    renderStats(); renderPanel();
+  }
+  function endGame(won) {
+    S.over = true; S.won = won; S.revealed = true; S.pendingEntry = null; S.pendingCell = null; S.sel = null;
+    const best = bestTurns();
+    $('endTitle').textContent = won ? `Solved in ${S.turns} turns` : 'The mine keeps its gems';
+    $('endText').textContent = won
+      ? (best === null || S.turns < best ? 'That is your best result on this device.' : `Your best is ${best} turns.`)
+      : 'Both answers were wrong. The real layout is shown on the board. Tap any edge label to watch a wave travel.';
+    $('saveBox').hidden = !won;
+    $('saveBtn').disabled = false;
+    $('saveMsg').textContent = '';
+    $('shareOut').hidden = true;
+    let name = '';
+    try { name = localStorage.getItem(NAME_KEY) || ''; } catch (e) { /* ignore */ }
+    $('nameField').value = name;
+    $('endOverlay').classList.add('on');
+    renderAll();
+  }
+  function saveScore() {
+    if (!S.won || S.saved) return;
+    const name = ($('nameField').value.trim() || 'Anonymous').slice(0, 16);
+    const entry = { name, turns: S.turns, seed: S.seed, date: Date.now() };
+    const all = loadScores();
+    all.push(entry);
+    if (!saveScores(all)) { $('saveMsg').textContent = 'Storage is blocked in this browser. The score is not saved.'; return; }
+    try { localStorage.setItem(NAME_KEY, name); } catch (e) { /* ignore */ }
+    S.saved = true;
+    $('saveBtn').disabled = true;
+    const rank = sortScores(all).indexOf(entry) + 1;
+    $('saveMsg').textContent = `Saved. Rank ${rank} of ${all.length} on this device.`;
+    renderStats();
+  }
+  function shareText() {
+    let url = '';
+    try { if (window.top === window && /^https?:$/.test(location.protocol)) url = location.href.split('#')[0] + '#mine=' + S.seed; } catch (e) { /* ignore */ }
+    const result = S.won ? `I solved it in ${S.turns} turns. ` : '';
+    return { url, text: `Wave Mine, mine #${S.seed}. ${result}Can you beat it?${url ? ' ' + url : ''}` };
+  }
+  async function shareMine() {
+    const { url, text } = shareText();
+    const out = $('shareOut');
+    try {
+      if (navigator.share) { await navigator.share(url ? { title: 'Wave Mine', text, url } : { title: 'Wave Mine', text }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      out.textContent = 'Copied: ' + text; out.hidden = false; return;
+    } catch (e) { /* fall through */ }
+    out.textContent = 'Copy this: ' + text; out.hidden = false;
+  }
+  function openNew() {
+    $('newNote').textContent = (!S.over && S.turns > 0) ? 'This ends the current game.' : '';
+    $('seedField').value = ''; $('seedMsg').textContent = '';
+    $('newOverlay').classList.add('on');
+  }
+  function playSeed() {
+    const n = parseInt($('seedField').value.replace(/\D/g, ''), 10);
+    if (!n || n > 2147483647) { $('seedMsg').textContent = 'Type a mine number between 1 and 2147483647.'; return; }
+    newGame(n);
+  }
+  let lbFilter = 'all';
+  function renderScores() {
+    const all = sortScores(loadScores()).filter(x => lbFilter === 'all' || x.seed === S.seed);
+    const ol = $('lbList');
+    ol.innerHTML = '';
+    $('lbEmpty').hidden = all.length > 0;
+    $('lbAll').setAttribute('aria-pressed', lbFilter === 'all');
+    $('lbThis').setAttribute('aria-pressed', lbFilter !== 'all');
+    all.slice(0, 50).forEach((x, i) => {
+      const li = document.createElement('li');
+      const d = new Date(x.date);
+      const when = isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      li.innerHTML = `<span class="rank">${i + 1}</span><span class="name"></span><span class="t"></span><span class="meta"></span>`;
+      li.querySelector('.name').textContent = x.name;
+      li.querySelector('.t').textContent = `${x.turns} turns`;
+      li.querySelector('.meta').textContent = `#${x.seed} ${when}`;
+      if (x.seed === S.seed && lbFilter === 'all') li.className = 'me';
+      ol.appendChild(li);
+    });
+  }
+  function openScores() { renderScores(); $('scoresOverlay').classList.add('on'); }
+  function askConfirm(title, onYes) {
+    $('confirmTitle').textContent = title;
+    $('confirmOverlay').classList.add('on');
+    $('confirmYes').onclick = () => { $('confirmOverlay').classList.remove('on'); onYes(); };
+    $('confirmNo').onclick = () => $('confirmOverlay').classList.remove('on');
+  }
+  function giveUp() {
+    if (S.over) return;
+    askConfirm('Show the layout and end this game?', () => {
+      S.attempts = 0;
+      endGame(false);
+      $('endText').textContent = 'The real layout is shown on the board. Tap any edge label to watch a wave travel.';
+    });
+  }
+
+  // ---------- render ----------
+  function renderAll() { renderStats(); renderLabels(); renderCells(); renderAsks(); renderGuess(); renderSolution(); renderBeam(); renderPanel(); renderMode(); renderPalette(); renderLog(); }
+
+  function renderStats() {
+    $('turns').textContent = S.turns;
+    $('attempts').textContent = S.attempts;
+    const best = bestTurns();
+    $('bestWrap').hidden = best === null;
+    if (best !== null) $('best').textContent = best;
+    $('mine').textContent = '#' + S.seed;
+  }
+  function renderLabels() {
+    for (const g of layers.labels.children) {
+      const id = +g.dataset.id;
+      const p = S.known.get(id);
+      g.setAttribute('class', 'lab' + (p ? ' known' : '') + (p && !p.hex ? ' clear' : '') + (p && isDark(p.hex) ? ' dark' : '') + (S.pendingEntry === id ? ' pending' : ''));
+      const ring = g.querySelector('circle.ring');
+      if (p && p.hex) ring.style.fill = p.hex; else ring.style.fill = '';
+      g.querySelectorAll('.nbg,.n').forEach(n => n.remove());
+      if (p) {
+        el('circle', { class: 'nbg', cx: 0.3, cy: -0.3, r: 0.19 }, g);
+        const t = el('text', { class: 'n', x: 0.3, y: -0.29 }, g);
+        t.textContent = p.n;
+      }
+    }
+  }
+  function renderCells() {
+    for (const r of layers.cells.children) {
+      const key = E.cellKey(+r.dataset.x, +r.dataset.y);
+      r.setAttribute('class', 'cell' + (S.pendingCell === key ? ' pending' : ''));
+    }
+  }
+  function renderAsks() {
+    layers.asks.innerHTML = '';
+    for (const p of S.asks.values()) {
+      const cx = OX + p.x + 0.5, cy = OY + p.y + 0.5;
+      if (p.hex) el('circle', { cx, cy, r: 0.22, fill: p.hex, stroke: 'rgba(0,0,0,.5)', 'stroke-width': 0.03 }, layers.asks);
+      else { el('circle', { cx, cy, r: 0.2, fill: 'none', stroke: 'rgba(242,177,52,.6)', 'stroke-width': 0.04 }, layers.asks); el('circle', { cx, cy, r: 0.05, fill: 'rgba(242,177,52,.7)' }, layers.asks); }
+    }
+  }
+  function renderGuess() {
+    layers.guess.innerHTML = '';
+    layers.guess.setAttribute('class', 'guess' + (S.revealed ? ' ghost' : ''));
+    S.guess.forEach((g, i) => {
+      if (!g) return;
+      const grp = drawGem(layers.guess, E.placePoly(g), E.PIECES[g.piece].color, S.sel === i && !S.revealed ? 'sel' : '');
+      grp.addEventListener('click', ev => { ev.stopPropagation(); if (S.mode === 'solve' && !S.over) selectPiece(i); });
+    });
+  }
+  function renderSolution() {
+    layers.solution.innerHTML = '';
+    if (!S.revealed) return;
+    for (const pl of S.solution) drawGem(layers.solution, E.placePoly(pl), E.PIECES[pl.piece].color);
+  }
+  function renderBeam() {
+    layers.beam.innerHTML = '';
+    if (!S.revealed || !S.beam) return;
+    const pts = S.beam.path.map(([x, y]) => `${x + OX},${y + OY}`).join(' ');
+    const stroke = S.beam.hex || '#f2b134';
+    if (S.beam.path.length < 2) { el('circle', { cx: S.beam.path[0][0] + OX, cy: S.beam.path[0][1] + OY, r: 0.12, fill: stroke }, layers.beam); return; }
+    const halo = el('polyline', { class: 'beam', points: pts, stroke, 'stroke-opacity': 0.35, style: 'stroke-width:0.3px' }, layers.beam);
+    const line = el('polyline', { class: 'beam', points: pts, stroke }, layers.beam);
+    if (!reduceMotion) {
+      const len = line.getTotalLength();
+      for (const l of [halo, line]) {
+        l.style.strokeDasharray = len; l.style.strokeDashoffset = len;
+        l.style.animation = `draw ${Math.min(2.2, 0.08 * len + 0.3)}s linear forwards`;
+      }
+    }
+  }
+  function renderPanel() {
+    const P = $('panel');
+    const e = id => E.ENTRIES[id].label;
+    if (S.pendingEntry !== null) {
+      P.innerHTML = `<div class="txt">Send a wave from <b>${e(S.pendingEntry)}</b>?<div class="small">This uses one turn.</div></div><div class="act"><button class="btn" id="goBtn">Send</button><button class="btn quiet" id="cancelBtn">Cancel</button></div>`;
+      $('goBtn').onclick = () => fireFrom(S.pendingEntry);
+      $('cancelBtn').onclick = () => { S.pendingEntry = null; renderPanel(); renderLabels(); };
+      return;
+    }
+    if (S.pendingCell !== null) {
+      const [x, y] = S.pendingCell.split(',').map(Number);
+      P.innerHTML = `<div class="txt">Ask what is in cell <b>${cellName(x, y)}</b>?<div class="small">This uses one turn.</div></div><div class="act"><button class="btn" id="goBtn">Ask</button><button class="btn quiet" id="cancelBtn">Cancel</button></div>`;
+      $('goBtn').onclick = () => askCell(x, y);
+      $('cancelBtn').onclick = () => { S.pendingCell = null; renderPanel(); renderCells(); };
+      return;
+    }
+    if (S.hint) { P.innerHTML = `<div class="txt">${S.hint}</div>`; return; }
+    if (S.last) {
+      const L = S.last;
+      const chip = `<div class="chip${L.hex ? '' : ' clear'}" style="${L.hex ? 'background:' + L.hex : ''}"></div>`;
+      if (L.kind === 'wave') {
+        const from = L.from !== undefined ? L.from : L.entry;
+        const to = from === L.entry ? L.exit : L.entry;
+        const where = from === to ? `Wave from <b>${e(from)}</b> comes back to <b>${e(from)}</b>.` : `Wave from <b>${e(from)}</b> exits at <b>${e(to)}</b>.`;
+        P.innerHTML = `${chip}<div class="txt">${where}<div>${L.name}</div><div class="small">${S.note}</div></div>`;
+      } else {
+        P.innerHTML = `${chip}<div class="txt">Cell <b>${cellName(L.x, L.y)}</b>: ${L.name ? L.name + ' gem' : 'nothing'}.<div class="small">${S.note}</div></div>`;
+      }
+      return;
+    }
+    const idle = { scan: 'Tap a letter or a number on the edge to send a wave.', ask: 'Tap a cell to ask what is there.', solve: 'Choose a gem below, then tap a cell to place it.' };
+    P.innerHTML = `<div class="txt">${idle[S.mode]}</div>`;
+  }
+  function renderMode() {
+    $('mScan').setAttribute('aria-pressed', S.mode === 'scan');
+    $('mAsk').setAttribute('aria-pressed', S.mode === 'ask');
+    $('mSolve').setAttribute('aria-pressed', S.mode === 'solve');
+    $('solve').classList.toggle('on', S.mode === 'solve');
+    $('checkBtn').disabled = S.over;
+    $('giveBtn').disabled = S.over;
+  }
+  function renderPalette() {
+    const pal = $('palette');
+    pal.innerHTML = '';
+    E.PIECES.forEach((p, i) => {
+      const b = document.createElement('button');
+      const g = S.guess[i];
+      b.innerHTML = shapeIcon(i, g ? g.orient : 0) + `<span>${p.name}</span>`;
+      b.setAttribute('aria-pressed', S.sel === i);
+      b.setAttribute('aria-label', `${p.name} gem${g ? ', placed' : ''}`);
+      if (g) b.classList.add('placed');
+      b.onclick = () => selectPiece(i);
+      pal.appendChild(b);
+    });
+    $('rotBtn').disabled = $('flipBtn').disabled = $('remBtn').disabled = S.sel === null || !S.guess[S.sel] || S.over;
+  }
+  function renderLog() {
+    const ol = $('log');
+    ol.innerHTML = '';
+    $('logTitle').textContent = S.probes.length ? 'Your questions' : 'Your questions will show here';
+    for (const p of [...S.probes].reverse()) {
+      const li = document.createElement('li');
+      const dot = `<span class="dot${p.hex ? '' : ' clear'}" style="${p.hex ? 'background:' + p.hex : ''}"></span>`;
+      const text = p.kind === 'wave'
+        ? (p.entry === p.exit ? `Wave ${E.ENTRIES[p.entry].label} comes back. ${p.name}` : `Wave ${E.ENTRIES[p.entry].label} exits at ${E.ENTRIES[p.exit].label}. ${p.name}`)
+        : `Cell ${cellName(p.x, p.y)}: ${p.name ? p.name + ' gem' : 'nothing'}`;
+      li.innerHTML = `<span class="num">${p.n}</span>${dot}<span>${text}</span>`;
+      ol.appendChild(li);
+    }
+  }
+
+  // ---------- wiring ----------
+  buildBoard();
+  $('mScan').onclick = () => setMode('scan');
+  $('mAsk').onclick = () => setMode('ask');
+  $('mSolve').onclick = () => setMode('solve');
+  $('rotBtn').onclick = () => transformSel('r');
+  $('flipBtn').onclick = () => transformSel('f');
+  $('remBtn').onclick = removeSel;
+  $('checkBtn').onclick = checkAnswer;
+  $('newBtn').onclick = openNew;
+  $('randomBtn').onclick = () => newGame(randomSeed());
+  $('playSeedBtn').onclick = playSeed;
+  $('seedField').addEventListener('keydown', ev => { if (ev.key === 'Enter') playSeed(); });
+  $('newCancel').onclick = () => $('newOverlay').classList.remove('on');
+  $('againBtn').onclick = () => newGame(randomSeed());
+  $('lookBtn').onclick = () => $('endOverlay').classList.remove('on');
+  $('saveBtn').onclick = saveScore;
+  $('nameField').addEventListener('keydown', ev => { if (ev.key === 'Enter') saveScore(); });
+  $('shareBtn').onclick = shareMine;
+  $('scoresBtn').onclick = openScores;
+  $('lbAll').onclick = () => { lbFilter = 'all'; renderScores(); };
+  $('lbThis').onclick = () => { lbFilter = 'this'; renderScores(); };
+  $('lbClose').onclick = () => $('scoresOverlay').classList.remove('on');
+  $('lbClear').onclick = () => { $('scoresOverlay').classList.remove('on'); askConfirm('Delete all scores on this device?', () => { saveScores([]); renderStats(); }); };
+  $('helpBtn').onclick = () => $('helpOverlay').classList.add('on');
+  $('helpClose').onclick = () => $('helpOverlay').classList.remove('on');
+  $('helpOverlay').addEventListener('click', ev => { if (ev.target === $('helpOverlay')) $('helpOverlay').classList.remove('on'); });
+  $('giveBtn').onclick = giveUp;
+  // colour legend in help
+  const sw = $('swatches');
+  for (const name in E.HEX) {
+    const hex = E.HEX[name];
+    const span = document.createElement('span');
+    span.innerHTML = `<i style="${hex ? 'background:' + hex : 'border-style:dashed'}"></i>${name}`;
+    sw.appendChild(span);
+  }
+  const m = (location.hash || '').match(/mine=(\d{1,10})/);
+  const first = m ? parseInt(m[1], 10) : 0;
+  newGame(first > 0 && first <= 2147483647 ? first : randomSeed());
+})();
+</script>
+</body>
+</html>
