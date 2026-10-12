@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#2c2622">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Wave Mine">
-<meta name="description" content="A deduction puzzle: send waves into a mine and find five hidden gems.">
+<meta name="description" content="A deduction puzzle: send waves into a mine and find five hidden gems. Solo or 1v1.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -37,6 +37,7 @@ html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   --btn: #efe6d6; --btnInk: #1a1512; --ok: #4fbf66; --bad: #e0574f;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: 'Barlow Semi Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
@@ -48,17 +49,30 @@ button:focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
 .app { max-width: 480px; margin: 0 auto; padding: 10px 12px 32px; }
 
 header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+header > div:first-child { min-width: 0; }
 h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
 .sub { color: var(--muted); font-size: 14px; margin: 0; }
 .hbtns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .hbtns button { background: none; border: 1.5px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; font-weight: 600; }
-header > div:first-child { min-width: 0; }
+.hbtns button[disabled] { opacity: .4; cursor: default; }
+
+.net { margin: 6px 0 8px; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1.5px solid var(--line); }
+.net .line { display: flex; align-items: center; gap: 8px; }
+.net .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.net .dot.live { background: var(--ok); }
+.net .dot.warn { background: var(--lamp); }
+.net .dot.bad { background: var(--bad); }
+.net .text { flex: 1; min-width: 0; }
+.net .text b { font-size: 19px; letter-spacing: .06em; }
+.net .row { margin-top: 8px; }
+.net .row .btn { padding: 8px 6px; font-size: 15px; }
 
 .stats { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 15px; color: var(--muted); margin: 4px 0 8px; }
 .stats span { white-space: nowrap; }
 .stats b { color: var(--ink); font-size: 18px; margin-left: 4px; }
 
 #board { width: 100%; height: auto; display: block; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+#board.locked { opacity: .75; }
 #board text { font-family: inherit; pointer-events: none; }
 #board .lab circle.ring { fill: var(--lab); stroke: none; }
 #board .lab text { fill: var(--labInk); font-size: 0.46px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
@@ -108,6 +122,7 @@ header > div:first-child { min-width: 0; }
 .palette button.placed { background: var(--panel2); }
 .row { display: flex; gap: 8px; }
 .row .btn { flex: 1; padding: 10px 6px; }
+.row + .row { margin-top: 8px; }
 
 .log { margin-top: 14px; }
 .log h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
@@ -125,21 +140,17 @@ header > div:first-child { min-width: 0; }
 .card ul { padding-left: 18px; margin: 0 0 10px; }
 .card li { margin-bottom: 4px; }
 .card .row { margin-top: 14px; }
+.card .row + .row { margin-top: 8px; }
 .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 15px; margin-bottom: 10px; }
 .swatches span { display: inline-flex; align-items: center; gap: 6px; }
 .swatches i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); display: inline-block; }
 .field { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); font: inherit; }
 .field:focus-visible { outline: 3px solid var(--lamp); outline-offset: 1px; }
+.code { font-size: 28px; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
 .sharebox { background: var(--panel); border-radius: 9px; padding: 8px 10px; font-size: 14px; word-break: break-word; margin-top: 10px; }
-.lb { list-style: none; margin: 0 0 6px; padding: 0; max-height: 40vh; overflow: auto; }
-.lb li { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
-.lb .rank { width: 22px; flex: none; color: var(--muted); }
-.lb .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb .t { font-weight: 700; flex: none; }
-.lb .meta { color: var(--muted); font-size: 13px; flex: none; }
-.lb li.me { color: var(--lamp); }
-.card .seg { margin: 0 0 10px; }
-.card .row + .row { margin-top: 8px; }
+.result { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.result span { white-space: nowrap; }
+.result b { font-size: 18px; text-align: right; }
 </style>
 </head>
 <body>
@@ -151,22 +162,31 @@ header > div:first-child { min-width: 0; }
     </div>
     <div class="hbtns">
       <button id="helpBtn">Help</button>
-      <button id="scoresBtn">Scores</button>
+      <button id="vsBtn">1v1</button>
       <button id="newBtn">New</button>
     </div>
   </header>
+
+  <div class="net" id="net" hidden>
+    <div class="line"><span class="dot" id="netDot"></span><div class="text" id="netText"></div></div>
+    <div class="row" id="netBtns"></div>
+  </div>
+  <div class="seg" id="viewSeg" hidden>
+    <button id="viewHunt" aria-pressed="true">Their mine</button>
+    <button id="viewMine" aria-pressed="false">Your mine</button>
+  </div>
+
   <div class="stats">
     <span>Turns<b id="turns">0</b></span>
     <span>Checks left<b id="attempts">2</b></span>
-    <span id="bestWrap" hidden>Best<b id="best"></b></span>
-    <span>Mine<b id="mine"></b></span>
+    <span id="mineWrap">Mine<b id="mine"></b></span>
   </div>
 
   <svg id="board" viewBox="0 0 12 10" role="application" aria-label="Mine board"></svg>
 
   <div class="panel" id="panel"></div>
 
-  <div class="seg" role="tablist">
+  <div class="seg" id="seg" role="tablist">
     <button id="mScan" aria-pressed="true">Send wave</button>
     <button id="mAsk" aria-pressed="false">Ask a cell</button>
     <button id="mSolve" aria-pressed="false">Place gems</button>
@@ -179,7 +199,7 @@ header > div:first-child { min-width: 0; }
       <button class="btn quiet" id="flipBtn">Flip</button>
       <button class="btn quiet" id="remBtn">Remove</button>
     </div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="checkBtn">Check answer</button></div>
+    <div class="row"><button class="btn" id="checkBtn">Check answer</button></div>
   </div>
 
   <div class="log">
@@ -193,16 +213,12 @@ header > div:first-child { min-width: 0; }
   <div class="card">
     <h2 id="endTitle"></h2>
     <p id="endText"></p>
-    <div id="saveBox" hidden>
-      <input class="field" id="nameField" maxlength="16" placeholder="Your name" autocomplete="off" aria-label="Your name">
-      <div class="row" style="margin-top:8px"><button class="btn" id="saveBtn">Save score</button></div>
-    </div>
-    <p class="sub" id="saveMsg"></p>
     <div class="row">
       <button class="btn quiet" id="lookBtn">Look at the mine</button>
       <button class="btn quiet" id="shareBtn">Share this mine</button>
     </div>
-    <div class="row"><button class="btn" id="againBtn">Random mine</button></div>
+    <div class="row" id="againRow"><button class="btn" id="againBtn">Random mine</button></div>
+    <div class="row" id="netRow" hidden><button class="btn quiet" id="leaveBtn2">Leave room</button><button class="btn" id="rematchBtn">Play again</button></div>
     <div class="sharebox" id="shareOut" hidden></div>
   </div>
 </div>
@@ -219,13 +235,16 @@ header > div:first-child { min-width: 0; }
   </div>
 </div>
 
-<div class="overlay" id="scoresOverlay">
+<div class="overlay" id="netOverlay">
   <div class="card">
-    <h2>Scores on this device</h2>
-    <div class="seg"><button id="lbAll" aria-pressed="true">All mines</button><button id="lbThis" aria-pressed="false">This mine</button></div>
-    <ol class="lb" id="lbList"></ol>
-    <p class="sub" id="lbEmpty">No scores yet. Solve a mine and save your score.</p>
-    <div class="row"><button class="btn quiet" id="lbClear">Clear scores</button><button class="btn" id="lbClose">Close</button></div>
+    <h2>Play 1v1</h2>
+    <p>Like Battleship. Each player hides five gems in their own mine. Then you take turns hunting in the other player's mine: one wave, one cell question or one answer check per turn. The first player to find the other's gems wins. Each player has two checks.</p>
+    <input class="field" id="netName" placeholder="Your name" maxlength="12" autocomplete="off" aria-label="Your name">
+    <div class="row" style="margin-top:8px"><button class="btn" id="createBtn">Create a room</button></div>
+    <p style="margin-top:14px">Or join a friend's room:</p>
+    <input class="field code" id="codeField" placeholder="ROOM CODE" maxlength="6" autocapitalize="characters" autocomplete="off" aria-label="Room code">
+    <div class="row"><button class="btn quiet" id="netCancel">Cancel</button><button class="btn" id="joinBtn">Join</button></div>
+    <p class="sub" id="netMsg"></p>
   </div>
 </div>
 
@@ -250,7 +269,8 @@ header > div:first-child { min-width: 0; }
       <li>Place all five gems and check your answer. You have two answers. Two wrong answers end the game.</li>
     </ul>
     <div class="swatches" id="swatches"></div>
-    <p class="sub">Placement rules: gem corners sit on grid points. Two gems never share an edge. Every gem is visible from at least one edge.</p>
+    <p class="sub">Placement rules: gem corners sit on grid points. Two gems never share an edge. Every gem is visible from at least one edge. The two white gems are not mirror images of each other.</p>
+    <p class="sub">1v1: create a room and share the code. Each player hides five gems, then you take turns hunting in the other player's mine. Switch between "Their mine" and "Your mine" to see your questions or theirs. The first correct answer wins. A wrong check costs one of your two checks. Give up and your opponent wins. The phones talk through the public relay ntfy.sh. Anyone with the room code can read the room, so keep the code between you.</p>
     <div class="row"><button class="btn" id="helpClose">Close</button></div>
   </div>
 </div>
@@ -560,6 +580,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
     return e;
   };
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const NAME_KEY = 'wavemine-name', CID_KEY = 'wavemine-cid', ROOM_KEY = 'wavemine-room';
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+  };
 
   // ---------- helpers ----------
   const isDark = hex => {
@@ -574,6 +600,14 @@ if (typeof module !== 'undefined') module.exports = Engine;
     const cx = poly.reduce((s, p) => s + p[0], 0) / poly.length, cy = poly.reduce((s, p) => s + p[1], 0) / poly.length;
     return poly.map(([x, y]) => [cx + (x - cx) * 0.55, cy + (y - cy) * 0.55]);
   };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const randomSeed = () => 100000 + Math.floor(Math.random() * 900000);
+  const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const genCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
+  const cleanCode = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const randId = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+  const onWeb = () => { try { return window.top === window && /^https?:$/.test(location.protocol); } catch (e) { return false; } };
+  const setHash = h => { try { if (onWeb()) history.replaceState(null, '', h || ' '); } catch (e) { /* ignore */ } };
   function drawGem(parent, poly, color, cls) {
     const g = el('g', {}, parent);
     el('polygon', { class: 'gem' + (cls ? ' ' + cls : ''), points: polyPts(poly), fill: E.GEM_HEX[color] }, g);
@@ -588,6 +622,18 @@ if (typeof module !== 'undefined') module.exports = Engine;
     const dx = (m - o.w) / 2, dy = (m - o.h) / 2;
     return `<svg viewBox="${-0.1 - dx} ${-0.1 - dy} ${m + 0.2} ${m + 0.2}" aria-hidden="true"><polygon points="${pts}" fill="${E.GEM_HEX[E.PIECES[pieceIdx].color]}" stroke="rgba(0,0,0,.45)" stroke-width="0.05"/><polygon points="${fpts}" fill="#fff" fill-opacity=".22"/></svg>`;
   }
+  // Layout <-> compact string. Scrambled with the room code so the hunter's phone carries the layout without showing it.
+  const packLayout = pls => pls.map(p => [p.piece, p.orient, p.x, p.y].join(',')).join(';');
+  function unpackLayout(s) {
+    if (typeof s !== 'string' || !s) return null;
+    const pls = s.split(';').map(t => { const [piece, orient, x, y] = t.split(',').map(Number); return { piece, orient, x, y }; });
+    if (pls.length !== E.PIECES.length || pls.some(p => [p.piece, p.orient, p.x, p.y].some(v => !Number.isInteger(v)))) return null;
+    if (pls.some((p, i) => p.piece !== i || !E.ORIENTS[E.PIECES[i].shape][p.orient])) return null;
+    return E.buildBoard(pls) ? pls : null;
+  }
+  const xorKey = (s, key) => Array.from(s, (c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length) ^ 0x2a)).join('');
+  const scramble = (s, key) => btoa(xorKey(s, key));
+  const unscramble = (b, key) => { try { return xorKey(atob(b), key); } catch (e) { return ''; } };
 
   // ---------- static board ----------
   const layers = {};
@@ -629,33 +675,26 @@ if (typeof module !== 'undefined') module.exports = Engine;
     return [OX + W + 0.5, OY + e.y + 0.5];
   }
 
-  // ---------- scores (this device only) ----------
-  const LB_KEY = 'wavemine-scores', NAME_KEY = 'wavemine-name';
-  function loadScores() {
-    try { const a = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
-  }
-  function saveScores(a) {
-    try { localStorage.setItem(LB_KEY, JSON.stringify(a.slice(0, 200))); return true; } catch (e) { return false; }
-  }
-  const sortScores = a => a.slice().sort((p, q) => p.turns - q.turns || p.date - q.date);
-  function bestTurns() { const a = loadScores(); return a.length ? Math.min(...a.map(x => x.turns)) : null; }
-  const randomSeed = () => 100000 + Math.floor(Math.random() * 900000);
-
-  // ---------- state ----------
+  // ---------- game state ----------
+  // S.net = { m, seq } when the board shows a 1v1 match. The board is then derived from the room's event log.
   let S = null;
-  function newGame(seed) {
+  function newGameFrom(solution, opts) {
+    opts = opts || {};
     S = {
-      seed, solution: E.randomLayout(seed), probes: [], known: new Map(), asks: new Map(),
-      turns: 0, attempts: 2, mode: 'scan', over: false, won: false, revealed: false,
+      seed: opts.seed || null, solution, probes: [], known: new Map(), asks: new Map(),
+      turns: 0, attempts: 2, checks: 0, mode: opts.mode || 'scan', over: false, won: false, revealed: !!opts.revealed,
+      locked: !!opts.locked, placing: !!opts.placing, noAsk: false, sending: false, net: opts.net || null,
       guess: E.PIECES.map(() => null), sel: null, pendingEntry: null, pendingCell: null,
       last: null, note: '', hint: '', beam: null,
     };
-    S.board = E.buildBoard(S.solution);
-    S.saved = false;
-    try { if (window.top === window && /^https?:$/.test(location.protocol)) history.replaceState(null, '', '#mine=' + seed); } catch (e) { /* ignore */ }
+    S.board = solution ? E.buildBoard(solution) : new Map();
     $('endOverlay').classList.remove('on');
     $('newOverlay').classList.remove('on');
     renderAll();
+  }
+  function newGame(seed) {
+    newGameFrom(E.randomLayout(seed), { seed });
+    if (!NET.room) setHash('#mine=' + seed);
   }
 
   // ---------- actions ----------
@@ -666,7 +705,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
       S.note = 'The full path is shown on the board.'; S.hint = '';
       renderPanel(); renderBeam(); return;
     }
-    if (S.over) return;
+    if (S.over || S.locked || S.noAsk) return;
     S.pendingCell = null;
     const known = S.known.get(id);
     if (known) {
@@ -680,6 +719,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     renderPanel(); renderLabels(); renderCells();
   }
   function fireFrom(id) {
+    if (S.net) { netAct({ t: 'q', kind: 'wave', entry: id }); return; }
     const r = E.fire(S.board, id);
     S.turns++;
     const p = { n: S.probes.length + 1, kind: 'wave', entry: id, exit: r.exit, name: r.name, hex: r.hex };
@@ -690,6 +730,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
   function tapCell(x, y) {
     const key = E.cellKey(x, y);
+    if (S.locked) return;
     if (S.mode === 'solve' && !S.over) {
       if (S.sel === null) {
         const hit = guessAt(x, y);
@@ -706,6 +747,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
       return;
     }
     if (S.mode === 'ask' && !S.over) {
+      if (S.noAsk) return;
       S.pendingEntry = null;
       const known = S.asks.get(key);
       if (known) { S.pendingCell = null; S.last = { ...known, free: true }; S.note = `You already asked this in question ${known.n}. No turn used.`; S.hint = ''; renderPanel(); renderLabels(); renderCells(); return; }
@@ -719,6 +761,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     renderPanel();
   }
   function askCell(x, y) {
+    if (S.net) { netAct({ t: 'q', kind: 'ask', x, y }); return; }
     const c = S.board.get(E.cellKey(x, y));
     S.turns++;
     const p = { n: S.probes.length + 1, kind: 'ask', x, y, name: c ? E.PIECES[c.piece].name : null, hex: c ? E.GEM_HEX[E.PIECES[c.piece].color] : null };
@@ -759,10 +802,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
     renderGuess(); renderPalette(); renderPanel();
   }
   function checkAnswer() {
-    if (S.over) return;
+    if (S.over || S.noAsk) return;
     if (S.guess.some(g => !g)) { S.hint = 'Place all five gems before you check.'; renderPanel(); return; }
     if (!E.buildBoard(S.guess)) { S.hint = 'Two gems overlap. Move one of them.'; renderPanel(); return; }
-    if (E.canonical(S.guess) === E.canonical(S.solution)) { endGame(true); return; }
+    if (S.net) { netAct({ t: 'check', guess: S.guess.map(g => ({ ...g })) }); return; }
+    const ok = E.canonical(S.guess) === E.canonical(S.solution);
+    if (ok) { endGame(true); return; }
     S.attempts--;
     if (S.attempts <= 0) { endGame(false); return; }
     S.hint = 'That is not the layout. One answer left.';
@@ -770,51 +815,42 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
   function endGame(won) {
     S.over = true; S.won = won; S.revealed = true; S.pendingEntry = null; S.pendingCell = null; S.sel = null;
-    const best = bestTurns();
     $('endTitle').textContent = won ? `Solved in ${S.turns} turns` : 'The mine keeps its gems';
     $('endText').textContent = won
-      ? (best === null || S.turns < best ? 'That is your best result on this device.' : `Your best is ${best} turns.`)
+      ? 'Tap any edge label to watch a wave travel.'
       : 'Both answers were wrong. The real layout is shown on the board. Tap any edge label to watch a wave travel.';
-    $('saveBox').hidden = !won;
-    $('saveBtn').disabled = false;
-    $('saveMsg').textContent = '';
     $('shareOut').hidden = true;
-    let name = '';
-    try { name = localStorage.getItem(NAME_KEY) || ''; } catch (e) { /* ignore */ }
-    $('nameField').value = name;
+    $('shareBtn').hidden = false;
+    $('againRow').hidden = false;
+    $('netRow').hidden = true;
     $('endOverlay').classList.add('on');
     renderAll();
   }
-  function saveScore() {
-    if (!S.won || S.saved) return;
-    const name = ($('nameField').value.trim() || 'Anonymous').slice(0, 16);
-    const entry = { name, turns: S.turns, seed: S.seed, date: Date.now() };
-    const all = loadScores();
-    all.push(entry);
-    if (!saveScores(all)) { $('saveMsg').textContent = 'Storage is blocked in this browser. The score is not saved.'; return; }
-    try { localStorage.setItem(NAME_KEY, name); } catch (e) { /* ignore */ }
-    S.saved = true;
-    $('saveBtn').disabled = true;
-    const rank = sortScores(all).indexOf(entry) + 1;
-    $('saveMsg').textContent = `Saved. Rank ${rank} of ${all.length} on this device.`;
-    renderStats();
+  function askConfirm(title, onYes) {
+    $('confirmTitle').textContent = title;
+    $('confirmOverlay').classList.add('on');
+    $('confirmYes').onclick = () => { $('confirmOverlay').classList.remove('on'); onYes(); };
+    $('confirmNo').onclick = () => $('confirmOverlay').classList.remove('on');
+  }
+  function giveUp() {
+    if (S.over || S.locked || S.placing) return;
+    if (S.net) { askConfirm(`Give up? ${oppName()} wins the match.`, () => netSend({ t: 'giveup', m: S.net.m })); return; }
+    askConfirm('Show the layout and end this game?', () => {
+      S.attempts = 0;
+      endGame(false);
+      $('endText').textContent = 'The real layout is shown on the board. Tap any edge label to watch a wave travel.';
+    });
   }
   function shareText() {
-    let url = '';
-    try { if (window.top === window && /^https?:$/.test(location.protocol)) url = location.href.split('#')[0] + '#mine=' + S.seed; } catch (e) { /* ignore */ }
+    const url = onWeb() ? location.href.split('#')[0] + '#mine=' + S.seed : '';
     const result = S.won ? `I solved it in ${S.turns} turns. ` : '';
     return { url, text: `Wave Mine, mine #${S.seed}. ${result}Can you beat it?${url ? ' ' + url : ''}` };
   }
-  async function shareMine() {
-    const { url, text } = shareText();
-    const out = $('shareOut');
+  async function shareAny(title, text, url, out) {
     try {
-      if (navigator.share) { await navigator.share(url ? { title: 'Wave Mine', text, url } : { title: 'Wave Mine', text }); return; }
+      if (navigator.share) { await navigator.share(url ? { title, text, url } : { title, text }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
-    try {
-      await navigator.clipboard.writeText(text);
-      out.textContent = 'Copied: ' + text; out.hidden = false; return;
-    } catch (e) { /* fall through */ }
+    try { await navigator.clipboard.writeText(text); out.textContent = 'Copied: ' + text; out.hidden = false; return; } catch (e) { /* fall through */ }
     out.textContent = 'Copy this: ' + text; out.hidden = false;
   }
   function openNew() {
@@ -827,40 +863,24 @@ if (typeof module !== 'undefined') module.exports = Engine;
     if (!n || n > 2147483647) { $('seedMsg').textContent = 'Type a mine number between 1 and 2147483647.'; return; }
     newGame(n);
   }
-  let lbFilter = 'all';
-  function renderScores() {
-    const all = sortScores(loadScores()).filter(x => lbFilter === 'all' || x.seed === S.seed);
-    const ol = $('lbList');
-    ol.innerHTML = '';
-    $('lbEmpty').hidden = all.length > 0;
-    $('lbAll').setAttribute('aria-pressed', lbFilter === 'all');
-    $('lbThis').setAttribute('aria-pressed', lbFilter !== 'all');
-    all.slice(0, 50).forEach((x, i) => {
-      const li = document.createElement('li');
-      const d = new Date(x.date);
-      const when = isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      li.innerHTML = `<span class="rank">${i + 1}</span><span class="name"></span><span class="t"></span><span class="meta"></span>`;
-      li.querySelector('.name').textContent = x.name;
-      li.querySelector('.t').textContent = `${x.turns} turns`;
-      li.querySelector('.meta').textContent = `#${x.seed} ${when}`;
-      if (x.seed === S.seed && lbFilter === 'all') li.className = 'me';
-      ol.appendChild(li);
-    });
+
+  // ---------- miner: placement rules ----------
+  function placementProblem(pls) {
+    if (!Array.isArray(pls) || pls.length !== E.PIECES.length || pls.some(g => !g)) return 'Place all five gems.';
+    const board = E.buildBoard(pls);
+    if (!board) return 'Two gems overlap. Move one of them.';
+    if (E.edgesTouch(pls)) return 'Two gems share an edge. Corners may touch, edges may not.';
+    if (!E.allVisible(board, pls.length)) return 'One gem is hidden behind others from every edge. Move it.';
+    if (E.whitesSymmetric(pls)) return 'The two white gems are mirror images. Change one of them.';
+    return null;
   }
-  function openScores() { renderScores(); $('scoresOverlay').classList.add('on'); }
-  function askConfirm(title, onYes) {
-    $('confirmTitle').textContent = title;
-    $('confirmOverlay').classList.add('on');
-    $('confirmYes').onclick = () => { $('confirmOverlay').classList.remove('on'); onYes(); };
-    $('confirmNo').onclick = () => $('confirmOverlay').classList.remove('on');
-  }
-  function giveUp() {
-    if (S.over) return;
-    askConfirm('Show the layout and end this game?', () => {
-      S.attempts = 0;
-      endGame(false);
-      $('endText').textContent = 'The real layout is shown on the board. Tap any edge label to watch a wave travel.';
-    });
+  function sealMine() {
+    if (!S.placing || !S.net || S.sending) return;
+    const problem = placementProblem(S.guess);
+    if (problem) { S.hint = problem; renderPanel(); return; }
+    const pls = S.guess.map(g => ({ ...g }));
+    S.sending = true; S.hint = 'Sealing the mine…'; renderPanel(); renderMode();
+    netSend({ t: 'mine', m: S.net.m, layout: scramble(packLayout(pls), NET.room) }).then(ok => { S.sending = false; if (!ok) S.hint = ''; netRender(); });
   }
 
   // ---------- render ----------
@@ -869,10 +889,9 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function renderStats() {
     $('turns').textContent = S.turns;
     $('attempts').textContent = S.attempts;
-    const best = bestTurns();
-    $('bestWrap').hidden = best === null;
-    if (best !== null) $('best').textContent = best;
-    $('mine').textContent = '#' + S.seed;
+    $('mineWrap').hidden = !S.seed;
+    if (S.seed) $('mine').textContent = '#' + S.seed;
+    svg.classList.toggle('locked', (!!S.locked || !!S.noAsk) && !S.revealed);
   }
   function renderLabels() {
     for (const g of layers.labels.children) {
@@ -909,12 +928,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
     S.guess.forEach((g, i) => {
       if (!g) return;
       const grp = drawGem(layers.guess, E.placePoly(g), E.PIECES[g.piece].color, S.sel === i && !S.revealed ? 'sel' : '');
-      grp.addEventListener('click', ev => { ev.stopPropagation(); if (S.mode === 'solve' && !S.over) selectPiece(i); });
+      grp.addEventListener('click', ev => { ev.stopPropagation(); if (S.mode === 'solve' && !S.over && !S.locked) selectPiece(i); });
     });
   }
   function renderSolution() {
     layers.solution.innerHTML = '';
-    if (!S.revealed) return;
+    if (!S.revealed || !S.solution) return;
     for (const pl of S.solution) drawGem(layers.solution, E.placePoly(pl), E.PIECES[pl.piece].color);
   }
   function renderBeam() {
@@ -949,30 +968,45 @@ if (typeof module !== 'undefined') module.exports = Engine;
       $('cancelBtn').onclick = () => { S.pendingCell = null; renderPanel(); renderCells(); };
       return;
     }
-    if (S.hint) { P.innerHTML = `<div class="txt">${S.hint}</div>`; return; }
+    if (S.hint) { P.innerHTML = `<div class="txt">${esc(S.hint)}</div>`; return; }
     if (S.last) {
       const L = S.last;
       const chip = `<div class="chip${L.hex ? '' : ' clear'}" style="${L.hex ? 'background:' + L.hex : ''}"></div>`;
+      const who = S.net && L.by && L.by !== NET.me ? `${esc(nameOf(L.by))}: ` : '';
       if (L.kind === 'wave') {
         const from = L.from !== undefined ? L.from : L.entry;
         const to = from === L.entry ? L.exit : L.entry;
-        const where = from === to ? `Wave from <b>${e(from)}</b> comes back to <b>${e(from)}</b>.` : `Wave from <b>${e(from)}</b> exits at <b>${e(to)}</b>.`;
-        P.innerHTML = `${chip}<div class="txt">${where}<div>${L.name}</div><div class="small">${S.note}</div></div>`;
+        const where = from === to ? `${who}Wave from <b>${e(from)}</b> comes back to <b>${e(from)}</b>.` : `${who}Wave from <b>${e(from)}</b> exits at <b>${e(to)}</b>.`;
+        P.innerHTML = `${chip}<div class="txt">${where}<div>${L.name}</div><div class="small">${esc(S.note)}</div></div>`;
       } else {
-        P.innerHTML = `${chip}<div class="txt">Cell <b>${cellName(L.x, L.y)}</b>: ${L.name ? L.name + ' gem' : 'nothing'}.<div class="small">${S.note}</div></div>`;
+        P.innerHTML = `${chip}<div class="txt">${who}Cell <b>${cellName(L.x, L.y)}</b>: ${L.name ? L.name + ' gem' : 'nothing'}.<div class="small">${esc(S.note)}</div></div>`;
       }
       return;
     }
     const idle = { scan: 'Tap a letter or a number on the edge to send a wave.', ask: 'Tap a cell to ask what is there.', solve: 'Choose a gem below, then tap a cell to place it.' };
+    if (S.placing) { P.innerHTML = `<div class="txt">${esc(S.sending ? 'Sealing the mine…' : 'Hide your five gems. Choose a gem, tap a cell, rotate or flip it. Then seal the mine.')}</div>`; return; }
+    if (S.locked) { P.innerHTML = `<div class="txt">${esc(lockedText())}</div>`; return; }
+    if (S.net && !S.over) { P.innerHTML = `<div class="txt">${esc(turnText())}</div>`; return; }
     P.innerHTML = `<div class="txt">${idle[S.mode]}</div>`;
   }
   function renderMode() {
+    $('seg').hidden = !!S.locked || !!S.placing;
     $('mScan').setAttribute('aria-pressed', S.mode === 'scan');
     $('mAsk').setAttribute('aria-pressed', S.mode === 'ask');
     $('mSolve').setAttribute('aria-pressed', S.mode === 'solve');
-    $('solve').classList.toggle('on', S.mode === 'solve');
-    $('checkBtn').disabled = S.over;
+    $('solve').classList.toggle('on', S.mode === 'solve' && !S.locked);
+    $('checkBtn').textContent = S.placing ? 'Seal the mine' : 'Check answer';
+    $('checkBtn').disabled = S.placing ? !!S.sending : (S.over || !!S.noAsk || (!!S.net && S.attempts <= 0));
+    $('giveBtn').hidden = !!S.locked || !!S.placing;
     $('giveBtn').disabled = S.over;
+    $('newBtn').disabled = !!NET.room;
+    const M = NET.match;
+    $('viewSeg').hidden = !(NET.room && M && M.ready);
+    if (NET.room && M && M.ready) {
+      $('viewHunt').textContent = `${oppName()}'s mine`;
+      $('viewHunt').setAttribute('aria-pressed', NET.view === 'hunt');
+      $('viewMine').setAttribute('aria-pressed', NET.view === 'mine');
+    }
   }
   function renderPalette() {
     const pal = $('palette');
@@ -992,7 +1026,9 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function renderLog() {
     const ol = $('log');
     ol.innerHTML = '';
-    $('logTitle').textContent = S.probes.length ? 'Your questions' : 'Your questions will show here';
+    $('logTitle').textContent = S.net
+      ? (!NET.match || !NET.match.ready ? '' : NET.view === 'mine' ? `${oppName()}'s questions in your mine` : `Your questions in ${oppName()}'s mine`)
+      : (S.probes.length ? 'Your questions' : 'Your questions will show here');
     for (const p of [...S.probes].reverse()) {
       const li = document.createElement('li');
       const dot = `<span class="dot${p.hex ? '' : ' clear'}" style="${p.hex ? 'background:' + p.hex : ''}"></span>`;
@@ -1004,6 +1040,326 @@ if (typeof module !== 'undefined') module.exports = Engine;
     }
   }
 
+  // ---------- 1v1: transports ----------
+  // Every message in a room is an event. Each phone rebuilds the match by replaying the room's events in order.
+  // The relay is any ntfy server. Default: the public ntfy.sh. Override with ?relay=https://your-ntfy.example
+  const RELAY = (() => { try { const r = new URLSearchParams(location.search).get('relay'); return r && /^https?:\/\//.test(r) ? r.replace(/\/$/, '') : 'https://ntfy.sh'; } catch (e) { return 'https://ntfy.sh'; } })();
+  function ntfyTransport(room, onRecord, onStatus) {
+    const topic = 'wavemine-' + room.toLowerCase();
+    const base = RELAY + '/' + topic;
+    let es = null, closed = false;
+    onStatus('connecting');
+    es = new EventSource(base + '/sse?since=all');
+    es.onopen = () => onStatus('live');
+    es.onerror = () => { if (!closed) onStatus('reconnecting'); };
+    es.addEventListener('message', ev => {
+      try { const d = JSON.parse(ev.data); if (d && d.id && typeof d.message === 'string') onRecord({ id: d.id, time: d.time, message: d.message }); } catch (e) { /* ignore */ }
+    });
+    return {
+      async send(obj) {
+        const body = JSON.stringify(obj);
+        let lastErr = null;
+        for (let i = 0; i < 3; i++) {
+          try {
+            const res = await fetch(base, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' } });
+            if (res.ok) {
+              const d = await res.json();
+              if (d && d.id) onRecord({ id: d.id, time: d.time, message: body });
+              return true;
+            }
+            lastErr = new Error('HTTP ' + res.status);
+          } catch (e) { lastErr = e; }
+          await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+        }
+        onStatus('sendfail', lastErr);
+        return false;
+      },
+      close() { closed = true; es.close(); },
+    };
+  }
+  // Same-device transport (two tabs in one browser): add ?transport=local to the address.
+  function localTransport(room, onRecord, onStatus) {
+    const key = 'wavemine-log-' + room;
+    const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('wavemine-' + room) : null;
+    const readLog = () => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return []; } };
+    if (bc) bc.onmessage = ev => onRecord(ev.data);
+    setTimeout(() => { readLog().forEach(onRecord); onStatus('live'); }, 0);
+    return {
+      async send(obj) {
+        const rec = { id: randId(), time: Math.floor(Date.now() / 1000), message: JSON.stringify(obj) };
+        const log = readLog(); log.push(rec);
+        try { localStorage.setItem(key, JSON.stringify(log)); } catch (e) { /* ignore */ }
+        if (bc) bc.postMessage(rec);
+        onRecord(rec);
+        return true;
+      },
+      close() { if (bc) bc.close(); },
+    };
+  }
+
+  // ---------- 1v1: room state ----------
+  // The room's event log is the only source of truth. Each phone rebuilds the match from it, so arrival order
+  // and lost connections do not matter: one action per turn number, and only the player whose turn it is counts.
+  const NET = { room: null, tr: null, me: null, name: '', seen: new Set(), events: [], host: null, guest: null, m: 1, match: null, status: 'offline', left: null, msg: '', endShown: 0, view: 'hunt', guess: null, setup: null, guessFor: 0 };
+  const myId = () => { let id = store.get(CID_KEY); if (!id) { id = randId(); store.set(CID_KEY, id); } return id; };
+  const oppName = () => { if (!NET.host || !NET.guest) return 'Opponent'; return (NET.host.id === NET.me ? NET.guest : NET.host).name; };
+  const nameOf = id => NET.host && NET.host.id === id ? NET.host.name : NET.guest && NET.guest.id === id ? NET.guest.name : '?';
+  const isPlayer = id => !!(NET.host && NET.host.id === id) || !!(NET.guest && NET.guest.id === id);
+  const otherOf = id => NET.host.id === id ? NET.guest.id : NET.host.id;
+  function seedFor(room, m) {
+    let h = 2166136261;
+    const str = room + ':' + m;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return (h % 2147483646) + 1;
+  }
+  function netSend(ev) {
+    if (!NET.tr) return Promise.resolve(false);
+    return NET.tr.send({ ...ev, by: NET.me });
+  }
+  // One action on the shared board. It shows up only after the relay accepted it.
+  function netAct(ev) {
+    const M = NET.match;
+    if (!M || !M.ready || M.over || M.turn !== NET.me || S.sending || NET.view !== 'hunt') return;
+    S.sending = true; S.noAsk = true; S.pendingEntry = null; S.pendingCell = null; S.hint = 'Sending…';
+    renderPanel(); renderLabels(); renderCells(); renderMode(); renderStats();
+    netSend({ ...ev, m: M.m, n: M.seq + 1 }).then(ok => {
+      S.sending = false;
+      if (!ok) S.hint = '';
+      netRender();
+    });
+  }
+  function onRecord(rec) {
+    if (!rec || !rec.id || NET.seen.has(rec.id)) return;
+    NET.seen.add(rec.id);
+    let ev; try { ev = JSON.parse(rec.message); } catch (e) { return; }
+    if (!ev || typeof ev.t !== 'string' || typeof ev.by !== 'string') return;
+    NET.events.push(ev);
+    rebuild();
+    scheduleNetRender();
+  }
+  function rebuild() {
+    NET.host = null; NET.guest = null; NET.m = 1; NET.left = null; NET.match = null;
+    const evs = NET.events;
+    const h = evs.find(e => e.t === 'host');
+    if (!h) return;
+    NET.host = { id: h.by, name: String(h.name || 'Host').slice(0, 12) };
+    if (NET.msg && NET.msg.startsWith('No room')) NET.msg = '';
+    const j = evs.find(e => e.t === 'join' && e.by !== h.by);
+    if (j) NET.guest = { id: j.by, name: String(j.name || 'Guest').slice(0, 12) };
+    for (const e of evs) if (e.t === 'rematch' && Number.isInteger(e.m) && e.m > NET.m && e.m < 1000 && isPlayer(e.by)) NET.m = e.m;
+    for (const e of evs) if (e.t === 'leave' && e.by !== NET.me && isPlayer(e.by)) NET.left = e.by;
+    if (!NET.guest) return;
+    NET.match = buildMatch(NET.m);
+  }
+  function buildMatch(m) {
+    const Hid = NET.host.id, Gid = NET.guest.id;
+    const M = { m, first: m % 2 === 1 ? Hid : Gid, turn: null, seq: 0, ready: false, layouts: {}, boards: {}, probes: {}, checks: {}, asked: {}, over: false, winner: null, loser: null, reason: '', lastCheck: null };
+    for (const id of [Hid, Gid]) { M.layouts[id] = null; M.probes[id] = []; M.checks[id] = 2; M.asked[id] = 0; }
+    const evs = NET.events.filter(e => e.m === m && isPlayer(e.by));
+    for (const e of evs) {
+      if (e.t !== 'mine' || M.layouts[e.by]) continue;
+      const pls = unpackLayout(unscramble(String(e.layout || ''), NET.room));
+      if (pls && !placementProblem(pls)) M.layouts[e.by] = pls;
+    }
+    M.ready = !!(M.layouts[Hid] && M.layouts[Gid]);
+    if (!M.ready) return M;
+    // Each player hunts in the other player's mine.
+    M.boards[Hid] = E.buildBoard(M.layouts[Gid]); M.boards[Gid] = E.buildBoard(M.layouts[Hid]);
+    const nextTurn = prev => {
+      const alive = [Hid, Gid].filter(id => M.checks[id] > 0);
+      if (alive.length === 0) return null;
+      if (alive.length === 1) return alive[0];
+      return prev === null ? M.first : otherOf(prev);
+    };
+    M.turn = M.first;
+    for (let n = 1; !M.over; n++) {
+      const ev = evs.find(e => (e.t === 'q' || e.t === 'check') && e.n === n && e.by === M.turn);
+      if (!ev) break;
+      const board = M.boards[ev.by], list = M.probes[ev.by];
+      if (ev.t === 'q') {
+        if (ev.kind === 'wave' && Number.isInteger(ev.entry) && E.ENTRIES[ev.entry]) {
+          const r = E.fire(board, ev.entry);
+          list.push({ n: list.length + 1, by: ev.by, kind: 'wave', entry: ev.entry, exit: r.exit, name: r.name, hex: r.hex });
+        } else if (ev.kind === 'ask' && Number.isInteger(ev.x) && Number.isInteger(ev.y) && ev.x >= 0 && ev.y >= 0 && ev.x < W && ev.y < H) {
+          const c = board.get(E.cellKey(ev.x, ev.y));
+          list.push({ n: list.length + 1, by: ev.by, kind: 'ask', x: ev.x, y: ev.y, name: c ? E.PIECES[c.piece].name : null, hex: c ? E.GEM_HEX[E.PIECES[c.piece].color] : null });
+        } else break;
+        M.asked[ev.by]++;
+      } else {
+        const g = Array.isArray(ev.guess) && ev.guess.length === E.PIECES.length ? unpackLayout(packLayout(ev.guess)) : null;
+        const ok = !!g && E.canonical(g) === E.canonical(M.layouts[otherOf(ev.by)]);
+        M.lastCheck = { n, by: ev.by, ok };
+        if (ok) { M.over = true; M.winner = ev.by; M.reason = 'solved'; }
+        else M.checks[ev.by]--;
+      }
+      M.seq = n;
+      if (!M.over) { M.turn = nextTurn(ev.by); if (M.turn === null) { M.over = true; M.reason = 'out'; } }
+    }
+    if (!M.over) {
+      const gu = evs.find(e => e.t === 'giveup');
+      if (gu) { M.over = true; M.reason = 'giveup'; M.loser = gu.by; const o = otherOf(gu.by); M.winner = M.checks[o] > 0 ? o : null; }
+    }
+    if (M.over) M.turn = null;
+    return M;
+  }
+  let netTimer = null;
+  function scheduleNetRender() { if (netTimer) return; netTimer = setTimeout(() => { netTimer = null; if (NET.room) netRender(); }, 0); }
+  function onStatus(status) {
+    if (status === 'sendfail') NET.msg = 'Could not reach the relay. Check the connection and try again.';
+    else { NET.status = status; if (status === 'live') NET.msg = ''; }
+    renderNet();
+  }
+
+  function joinRoom(room, name, create) {
+    leaveRoom(true);
+    NET.room = room; NET.name = name; NET.me = myId();
+    NET.seen = new Set(); NET.events = []; NET.host = null; NET.guest = null; NET.m = 1; NET.match = null; NET.left = null; NET.msg = ''; NET.status = 'connecting'; NET.endShown = 0; NET.view = 'hunt'; NET.guessFor = 0;
+    store.set(NAME_KEY, name); store.set(ROOM_KEY, room);
+    const local = new URLSearchParams(location.search).get('transport') === 'local';
+    NET.tr = (local ? localTransport : ntfyTransport)(room, onRecord, onStatus);
+    setHash('#room=' + room);
+    NET.tr.send(create ? { t: 'host', name, by: NET.me } : { t: 'join', name, by: NET.me });
+    if (!create) setTimeout(() => { if (NET.room === room && !NET.host) { NET.msg = 'No room with this code yet. Check the code with your friend.'; renderNet(); } }, 7000);
+    $('netOverlay').classList.remove('on');
+    newGameFrom(null, { locked: true });
+    renderNet();
+  }
+  function leaveRoom(quiet) {
+    if (NET.tr) { if (!quiet) NET.tr.send({ t: 'leave', by: NET.me }); NET.tr.close(); }
+    NET.tr = null; NET.room = null; NET.events = []; NET.host = null; NET.guest = null; NET.match = null; NET.left = null; NET.status = 'offline';
+    store.del(ROOM_KEY);
+    $('endOverlay').classList.remove('on');
+    if (!quiet) { setHash(''); newGame(randomSeed()); renderNet(); }
+  }
+  function lockedText() {
+    if (!NET.host) return 'Connecting to the room.';
+    const iAmIn = NET.host.id === NET.me || (NET.guest && NET.guest.id === NET.me);
+    if (!iAmIn) return NET.guest ? 'This room already has two players.' : 'Connecting to the room.';
+    if (!NET.guest) return 'Waiting for a player to join.';
+    const M = NET.match;
+    if (M && !M.ready) return `Your mine is sealed. Waiting for ${oppName()} to seal theirs.`;
+    if (M && NET.view === 'mine') return M.over ? 'Your mine. Tap any edge label to watch a wave travel.' : `${oppName()} hunts here. You see every question they ask.`;
+    return 'Waiting.';
+  }
+  function turnText() {
+    const M = NET.match;
+    if (S.sending) return 'Sending…';
+    if (!M || M.over) return '';
+    return M.turn === NET.me ? `Your turn. Hunt in ${oppName()}'s mine: send a wave, ask a cell, or check your answer.` : `${nameOf(M.turn)}'s turn. You can place gems while you wait.`;
+  }
+  function endLine(M) {
+    const me = NET.me, who = id => id === me ? 'You' : nameOf(id);
+    if (M.reason === 'solved') return `${who(M.winner)} found ${M.winner === me ? oppName() + "'s" : 'your'} gems after ${M.asked[M.winner]} question${M.asked[M.winner] === 1 ? '' : 's'}.`;
+    if (M.reason === 'giveup') return `${who(M.loser)} gave up.${M.winner ? '' : ' No winner.'}`;
+    return 'Both players used their two checks. No winner.';
+  }
+  function netRender() {
+    if (!NET.room) { renderNet(); return; }
+    const M = NET.match;
+    if (!M) { if (!S.locked || S.net) newGameFrom(null, { locked: true }); renderNet(); renderMode(); return; }
+    if (NET.guessFor !== M.m) { NET.guessFor = M.m; NET.guess = E.PIECES.map(() => null); NET.setup = E.PIECES.map(() => null); NET.view = 'hunt'; }
+    syncBoard(M, M.ready ? NET.view : 'setup');
+    if (M.over && NET.endShown !== M.m) { NET.endShown = M.m; showNetEnd(M); }
+    renderNet();
+  }
+  // Make the board show one side of the match exactly as the event log describes it. Guess pieces stay local.
+  function syncBoard(M, view) {
+    const me = NET.me, opp = otherOf(me);
+    const sealed = !!M.layouts[me];
+    const key = `${M.m}:${view}:${sealed ? 1 : 0}:${M.ready ? 1 : 0}`;
+    if (!S.net || S.net.key !== key) {
+      const net = { m: M.m, key, seq: M.seq, count: -1 };
+      if (view === 'setup' && !sealed) { newGameFrom(null, { net, placing: true, mode: 'solve' }); S.guess = NET.setup; }
+      else if (view === 'setup') newGameFrom(M.layouts[me], { net, revealed: true, locked: true });
+      else if (view === 'mine') newGameFrom(M.layouts[me], { net, revealed: true, locked: true });
+      else { newGameFrom(M.layouts[opp], { net }); S.guess = NET.guess; }
+    }
+    if (view === 'setup') { S.noAsk = true; renderAll(); return; }
+    const probes = view === 'mine' ? M.probes[opp] : M.probes[me];
+    S.probes = probes.map(p => ({ ...p }));
+    S.known = new Map(); S.asks = new Map();
+    for (const p of S.probes) {
+      if (p.kind === 'wave') { S.known.set(p.entry, p); S.known.set(p.exit, p); }
+      else S.asks.set(E.cellKey(p.x, p.y), p);
+    }
+    S.turns = S.probes.length;
+    S.attempts = M.checks[me];
+    S.over = M.over; S.won = M.winner === me; S.revealed = M.over || view === 'mine';
+    S.noAsk = view !== 'hunt' || M.over || M.turn !== me || S.sending;
+    if (M.seq !== S.net.seq || S.probes.length !== S.net.count) {
+      S.net.seq = M.seq; S.net.count = S.probes.length;
+      S.pendingEntry = null; S.pendingCell = null; S.hint = ''; S.note = '';
+      const lastP = S.probes[S.probes.length - 1];
+      S.last = lastP ? { ...lastP, from: lastP.entry } : null;
+      if (M.lastCheck && M.lastCheck.n === M.seq) {
+        const by = M.lastCheck.by === me ? 'You' : nameOf(M.lastCheck.by);
+        S.hint = M.lastCheck.ok ? `${by} found the gems.` : `${by} checked an answer. Wrong. ${M.checks[M.lastCheck.by]} check${M.checks[M.lastCheck.by] === 1 ? '' : 's'} left.`;
+      }
+    }
+    if (M.over) { S.sel = null; S.sending = false; }
+    renderAll();
+  }
+  function showNetEnd(M) {
+    const me = NET.me, o = otherOf(me);
+    $('endTitle').textContent = M.winner === me ? 'You win' : M.winner ? `${nameOf(M.winner)} wins` : 'The mine keeps its gems';
+    $('endText').textContent = `${endLine(M)} Questions: you ${M.asked[me]}, ${nameOf(o)} ${M.asked[o]}. ${nameOf(o)}'s gems are on the board now. Tap any edge label to watch a wave travel.`;
+    $('shareOut').hidden = true;
+    $('shareBtn').hidden = true;
+    $('againRow').hidden = true;
+    $('netRow').hidden = false;
+    $('endOverlay').classList.add('on');
+  }
+  function renderNet() {
+    const box = $('net');
+    box.hidden = !NET.room;
+    $('newBtn').disabled = !!NET.room;
+    if (!NET.room) return;
+    const M = NET.match;
+    $('netDot').className = 'dot ' + (NET.status === 'live' ? 'live' : NET.status === 'reconnecting' || NET.status === 'connecting' ? 'warn' : 'bad');
+    let text = '';
+    const btns = [];
+    const code = `<b>${esc(NET.room)}</b>`;
+    if (!NET.host) text = `Room ${code}. Connecting…`;
+    else if (NET.host.id !== NET.me && !(NET.guest && NET.guest.id === NET.me)) text = NET.guest ? `Room ${code} already has two players.` : `Room ${code}. Connecting…`;
+    else if (!NET.guest) { text = `Room ${code}. Share this code and wait for a player.`; btns.push(['Share code', shareRoom]); }
+    else if (!M.ready) {
+      const mine = !!M.layouts[NET.me], theirs = !!M.layouts[otherOf(NET.me)];
+      text = `Match ${M.m}. ${mine ? 'Your mine is sealed.' : 'Hide your five gems and seal the mine.'} ${theirs ? `${esc(oppName())}'s mine is sealed.` : `${esc(oppName())} is still hiding gems.`}`;
+    }
+    else if (M.over) { text = `Match ${M.m} over. ${esc(endLine(M))}`; btns.push(['Play again', () => netSend({ t: 'rematch', m: NET.m + 1 })]); }
+    else {
+      const o = otherOf(NET.me);
+      text = `${M.turn === NET.me ? '<b>Your turn.</b>' : esc(nameOf(M.turn)) + "'s turn."} Questions: you ${M.asked[NET.me]}, ${esc(nameOf(o))} ${M.asked[o]}. Checks left: you ${M.checks[NET.me]}, ${esc(nameOf(o))} ${M.checks[o]}.`;
+    }
+    if (NET.left && NET.left !== NET.me) text += ` ${esc(nameOf(NET.left))} left the room.`;
+    if (NET.status === 'reconnecting') text += ' Reconnecting…';
+    if (NET.msg) text += ' ' + esc(NET.msg);
+    $('netText').innerHTML = text;
+    btns.push(['Leave', () => askConfirm('Leave this room?', () => leaveRoom(false))]);
+    const row = $('netBtns');
+    row.innerHTML = '';
+    for (const [label, fn] of btns) { const b = document.createElement('button'); b.className = 'btn' + (label === 'Leave' ? ' quiet' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); }
+  }
+  function shareRoom() {
+    const url = onWeb() ? location.href.split('#')[0] + '#room=' + NET.room : '';
+    const text = `Play Wave Mine 1v1 with me. Room code ${NET.room}.${url ? ' ' + url : ''}`;
+    const out = document.createElement('div');
+    out.className = 'sharebox'; out.hidden = true;
+    shareAny('Wave Mine 1v1', text, url, out).then(() => { if (!out.hidden) { $('netBtns').after(out); setTimeout(() => out.remove(), 8000); } });
+  }
+  function openLobby(prefillCode) {
+    $('netName').value = store.get(NAME_KEY) || '';
+    $('codeField').value = prefillCode || '';
+    $('netMsg').textContent = NET.room ? `You are in room ${NET.room}. Leave it first to start another.` : (onWeb() ? '' : '1v1 needs the page on a web address, for example the GitHub Pages link. It does not work from a file or inside a preview.');
+    $('createBtn').disabled = $('joinBtn').disabled = !!NET.room;
+    $('netOverlay').classList.add('on');
+  }
+  function lobbyName() {
+    const name = $('netName').value.trim().slice(0, 12);
+    if (!name) { $('netMsg').textContent = 'Type your name first.'; return null; }
+    return name;
+  }
+
   // ---------- wiring ----------
   buildBoard();
   $('mScan').onclick = () => setMode('scan');
@@ -1012,7 +1368,9 @@ if (typeof module !== 'undefined') module.exports = Engine;
   $('rotBtn').onclick = () => transformSel('r');
   $('flipBtn').onclick = () => transformSel('f');
   $('remBtn').onclick = removeSel;
-  $('checkBtn').onclick = checkAnswer;
+  $('checkBtn').onclick = () => S.placing ? sealMine() : checkAnswer();
+  $('viewHunt').onclick = () => { NET.view = 'hunt'; netRender(); };
+  $('viewMine').onclick = () => { NET.view = 'mine'; netRender(); };
   $('newBtn').onclick = openNew;
   $('randomBtn').onclick = () => newGame(randomSeed());
   $('playSeedBtn').onclick = playSeed;
@@ -1020,18 +1378,23 @@ if (typeof module !== 'undefined') module.exports = Engine;
   $('newCancel').onclick = () => $('newOverlay').classList.remove('on');
   $('againBtn').onclick = () => newGame(randomSeed());
   $('lookBtn').onclick = () => $('endOverlay').classList.remove('on');
-  $('saveBtn').onclick = saveScore;
-  $('nameField').addEventListener('keydown', ev => { if (ev.key === 'Enter') saveScore(); });
-  $('shareBtn').onclick = shareMine;
-  $('scoresBtn').onclick = openScores;
-  $('lbAll').onclick = () => { lbFilter = 'all'; renderScores(); };
-  $('lbThis').onclick = () => { lbFilter = 'this'; renderScores(); };
-  $('lbClose').onclick = () => $('scoresOverlay').classList.remove('on');
-  $('lbClear').onclick = () => { $('scoresOverlay').classList.remove('on'); askConfirm('Delete all scores on this device?', () => { saveScores([]); renderStats(); }); };
+  $('shareBtn').onclick = () => { const { url, text } = shareText(); shareAny('Wave Mine', text, url, $('shareOut')); };
   $('helpBtn').onclick = () => $('helpOverlay').classList.add('on');
   $('helpClose').onclick = () => $('helpOverlay').classList.remove('on');
   $('helpOverlay').addEventListener('click', ev => { if (ev.target === $('helpOverlay')) $('helpOverlay').classList.remove('on'); });
   $('giveBtn').onclick = giveUp;
+  $('vsBtn').onclick = () => openLobby('');
+  $('netCancel').onclick = () => $('netOverlay').classList.remove('on');
+  $('createBtn').onclick = () => { const name = lobbyName(); if (name) joinRoom(genCode(), name, true); };
+  $('joinBtn').onclick = () => {
+    const name = lobbyName(); if (!name) return;
+    const code = cleanCode($('codeField').value);
+    if (code.length !== 6) { $('netMsg').textContent = 'A room code has 6 letters or digits.'; return; }
+    joinRoom(code, name, false);
+  };
+  $('codeField').addEventListener('keydown', ev => { if (ev.key === 'Enter') $('joinBtn').click(); });
+  $('leaveBtn2').onclick = () => leaveRoom(false);
+  $('rematchBtn').onclick = () => { $('endOverlay').classList.remove('on'); netSend({ t: 'rematch', m: NET.m + 1 }); };
   // colour legend in help
   const sw = $('swatches');
   for (const name in E.HEX) {
@@ -1040,9 +1403,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
     span.innerHTML = `<i style="${hex ? 'background:' + hex : 'border-style:dashed'}"></i>${name}`;
     sw.appendChild(span);
   }
-  const m = (location.hash || '').match(/mine=(\d{1,10})/);
-  const first = m ? parseInt(m[1], 10) : 0;
+  const hash = location.hash || '';
+  const mm = hash.match(/mine=(\d{1,10})/), rm = hash.match(/room=([A-Za-z0-9]{6})/);
+  const first = mm ? parseInt(mm[1], 10) : 0;
   newGame(first > 0 && first <= 2147483647 ? first : randomSeed());
+  if (rm) openLobby(cleanCode(rm[1]));
+  else if (store.get(ROOM_KEY)) openLobby(cleanCode(store.get(ROOM_KEY)));
 })();
 </script>
 </body>
