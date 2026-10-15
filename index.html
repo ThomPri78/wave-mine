@@ -243,6 +243,8 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
     <h2>Play 1v1</h2>
     <p>Like Battleship. Each player hides five gems in their own mine. Then you take turns hunting in the other player's mine: one wave, one cell question or one answer check per turn. The first player to find the other's gems wins. Each player has two checks.</p>
     <input class="field" id="netName" placeholder="Your name" maxlength="12" autocomplete="off" aria-label="Your name">
+    <input class="field" id="pingField" placeholder="ntfy topic for turn alerts (optional)" maxlength="40" autocomplete="off" aria-label="ntfy topic for turn alerts" style="margin-top:8px">
+    <p class="sub" id="storeNote" style="margin:6px 0 0"></p>
     <div class="row" style="margin-top:8px"><button class="btn" id="createBtn">Create a room</button></div>
     <p style="margin-top:14px">Or join a friend's room:</p>
     <input class="field code" id="codeField" placeholder="ROOM CODE" maxlength="6" autocapitalize="characters" autocomplete="off" aria-label="Room code">
@@ -273,7 +275,8 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
     </ul>
     <div class="swatches" id="swatches"></div>
     <p class="sub">Placement rules: gem corners sit on grid points. Two gems never share an edge. Every gem is visible from at least one edge. The two white gems are not mirror images of each other.</p>
-    <p class="sub">1v1: create a room and share the code. Each player hides five gems, then you take turns hunting in the other player's mine. Switch between "Their mine" and "Your mine" to see your questions or theirs. The first correct answer wins. A wrong check costs one of your two checks. Give up and your opponent wins. The phones talk through the public relay ntfy.sh. Anyone with the room code can read the room, so keep the code between you.</p>
+    <p class="sub">1v1: create a room and share the code. Each player hides five gems, then you take turns hunting in the other player's mine. Switch between "Their mine" and "Your mine" to see your questions or theirs. The first correct answer wins. A wrong check costs one of your two checks. Give up and your opponent wins. You do not need to be online at the same time: close the game, come back later, open the link and tap Join. Anyone with the room code can read the room, so keep the code between you.</p>
+    <p class="sub">Turn alerts: install the free ntfy app, subscribe to a topic name of your own, for example wm-ana-7f3k, and type that name in the 1v1 screen. Your opponent's phone sends you a notification after each of their moves.</p>
     <p class="sub" id="fontInfo"></p>
     <div class="row"><button class="btn" id="helpClose">Close</button></div>
   </div>
@@ -572,6 +575,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
 </script>
 <script>
 (() => {
+  // ===== 1v1 storage =====
+  // Paste your Firebase Realtime Database URL between the quotes, for example
+  // 'https://wave-mine-default-rtdb.europe-west1.firebasedatabase.app'. Rooms are then kept, and players can
+  // take turns hours or days apart. Leave it empty to use the public ntfy.sh relay instead: free, no setup,
+  // but a room lives only 12 hours.
+  const DB_URL = 'https://wave-mine-db-default-rtdb.europe-west1.firebasedatabase.app/';
   const E = Engine;
   const W = E.W, H = E.H, OX = 1, OY = 1;
   const NS = 'http://www.w3.org/2000/svg';
@@ -584,7 +593,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     return e;
   };
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const NAME_KEY = 'wavemine-name', CID_KEY = 'wavemine-cid', ROOM_KEY = 'wavemine-room';
+  const NAME_KEY = 'wavemine-name', CID_KEY = 'wavemine-cid', ROOM_KEY = 'wavemine-room', PING_KEY = 'wavemine-ping';
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } },
@@ -1082,6 +1091,46 @@ if (typeof module !== 'undefined') module.exports = Engine;
     };
   }
   // Same-device transport (two tabs in one browser): add ?transport=local to the address.
+  // Firebase Realtime Database over its REST API: POST appends an event, EventSource streams the room.
+  // No SDK, no key in the file beyond the database address. Rules in the repository README keep it append-only.
+  function firebaseTransport(dbUrl, room, onRecord, onStatus) {
+    const base = dbUrl.replace(/\/$/, '') + '/rooms/' + room + '/events';
+    let es = null, closed = false;
+    const record = (id, data) => { if (data && typeof data === 'object' && !Array.isArray(data)) onRecord({ id, message: JSON.stringify(data) }); };
+    const handle = (path, data) => {
+      if (!data) return;
+      if (path === '/') { for (const id of Object.keys(data).sort()) record(id, data[id]); return; }
+      const parts = path.replace(/^\//, '').split('/');
+      if (parts.length === 1) record(parts[0], data);
+    };
+    const open = () => {
+      if (closed) return;
+      onStatus('connecting');
+      es = new EventSource(base + '.json');
+      es.addEventListener('put', e => { try { const d = JSON.parse(e.data); handle(d.path, d.data); onStatus('live'); } catch (err) { /* ignore */ } });
+      es.addEventListener('patch', e => { try { const d = JSON.parse(e.data); if (d.path === '/') handle('/', d.data); onStatus('live'); } catch (err) { /* ignore */ } });
+      es.addEventListener('keep-alive', () => onStatus('live'));
+      es.addEventListener('cancel', () => { onStatus('bad'); });
+      es.addEventListener('auth_revoked', () => { es.close(); open(); });
+      es.onopen = () => onStatus('live');
+      es.onerror = () => onStatus('reconnecting');
+    };
+    open();
+    return {
+      async send(obj) {
+        for (let i = 0; i < 3; i++) {
+          try {
+            const res = await fetch(base + '.json', { method: 'POST', body: JSON.stringify(obj) });
+            if (res.ok) { const j = await res.json(); if (j && j.name) { onRecord({ id: j.name, message: JSON.stringify(obj) }); return true; } }
+          } catch (e) { /* retry */ }
+          await new Promise(r => setTimeout(r, 500 * (i + 1)));
+        }
+        onStatus('sendfail');
+        return false;
+      },
+      close() { closed = true; if (es) es.close(); },
+    };
+  }
   function localTransport(room, onRecord, onStatus) {
     const key = 'wavemine-log-' + room;
     const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('wavemine-' + room) : null;
@@ -1116,9 +1165,24 @@ if (typeof module !== 'undefined') module.exports = Engine;
     for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
     return (h % 2147483646) + 1;
   }
+  function cleanTopic(t) { return String(t || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40); }
+  // Turn alert through ntfy to the opponent's own topic, if they gave one. Fire and forget.
+  function pingOpponent(text) {
+    try {
+      const opp = NET.host && NET.host.id !== NET.me ? NET.host : NET.guest && NET.guest.id !== NET.me ? NET.guest : null;
+      if (!opp || !opp.ping) return;
+      const url = onWeb() ? location.href.split('#')[0] + '#room=' + NET.room : '';
+      const qs = '?title=' + encodeURIComponent('Wave Mine') + '&tags=gem' + (url ? '&click=' + encodeURIComponent(url) : '');
+      fetch(RELAY + '/' + opp.ping + qs, { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
+  const PING_TEXT = { q: 'played. Your turn.', check: 'checked an answer. Your turn.', mine: 'sealed their mine.', giveup: 'gave up. You win.', rematch: 'wants a rematch. Hide your gems.' };
   function netSend(ev) {
     if (!NET.tr) return Promise.resolve(false);
-    return NET.tr.send({ ...ev, by: NET.me });
+    return NET.tr.send({ ...ev, by: NET.me }).then(ok => {
+      if (ok && PING_TEXT[ev.t]) pingOpponent(`${NET.name} ${PING_TEXT[ev.t]} Room ${NET.room}.`);
+      return ok;
+    });
   }
   // One action on the shared board. It shows up only after the relay accepted it.
   function netAct(ev) {
@@ -1146,10 +1210,10 @@ if (typeof module !== 'undefined') module.exports = Engine;
     const evs = NET.events;
     const h = evs.find(e => e.t === 'host');
     if (!h) return;
-    NET.host = { id: h.by, name: String(h.name || 'Host').slice(0, 12) };
+    NET.host = { id: h.by, name: String(h.name || 'Host').slice(0, 12), ping: cleanTopic(h.ping) };
     if (NET.msg && NET.msg.startsWith('No room')) NET.msg = '';
     const j = evs.find(e => e.t === 'join' && e.by !== h.by);
-    if (j) NET.guest = { id: j.by, name: String(j.name || 'Guest').slice(0, 12) };
+    if (j) NET.guest = { id: j.by, name: String(j.name || 'Guest').slice(0, 12), ping: cleanTopic(j.ping) };
     for (const e of evs) if (e.t === 'rematch' && Number.isInteger(e.m) && e.m > NET.m && e.m < 1000 && isPlayer(e.by)) NET.m = e.m;
     for (const e of evs) if (e.t === 'leave' && e.by !== NET.me && isPlayer(e.by)) NET.left = e.by;
     if (!NET.guest) return;
@@ -1219,10 +1283,15 @@ if (typeof module !== 'undefined') module.exports = Engine;
     NET.room = room; NET.name = name; NET.me = myId();
     NET.seen = new Set(); NET.events = []; NET.host = null; NET.guest = null; NET.m = 1; NET.match = null; NET.left = null; NET.msg = ''; NET.status = 'connecting'; NET.endShown = 0; NET.view = 'hunt'; NET.guessFor = 0;
     store.set(NAME_KEY, name); store.set(ROOM_KEY, room);
-    const local = new URLSearchParams(location.search).get('transport') === 'local';
-    NET.tr = (local ? localTransport : ntfyTransport)(room, onRecord, onStatus);
+    const q = new URLSearchParams(location.search);
+    const dbUrl = /^https?:\/\//.test(q.get('db') || '') ? q.get('db') : (/^https?:\/\//.test(DB_URL) ? DB_URL : '');
+    NET.tr = q.get('transport') === 'local' ? localTransport(room, onRecord, onStatus)
+      : dbUrl ? firebaseTransport(dbUrl, room, onRecord, onStatus)
+      : ntfyTransport(room, onRecord, onStatus);
     setHash('#room=' + room);
-    NET.tr.send(create ? { t: 'host', name, by: NET.me } : { t: 'join', name, by: NET.me });
+    const ping = cleanTopic($('pingField').value);
+    store.set(PING_KEY, ping);
+    NET.tr.send({ t: create ? 'host' : 'join', name, by: NET.me, ping });
     if (!create) setTimeout(() => { if (NET.room === room && !NET.host) { NET.msg = 'No room with this code yet. Check the code with your friend.'; renderNet(); } }, 7000);
     $('netOverlay').classList.remove('on');
     newGameFrom(null, { locked: true });
@@ -1353,7 +1422,10 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
   function openLobby(prefillCode) {
     $('netName').value = store.get(NAME_KEY) || '';
+    $('pingField').value = store.get(PING_KEY) || '';
     $('codeField').value = prefillCode || '';
+    const durable = /^https?:\/\//.test(DB_URL) || /^https?:\/\//.test(new URLSearchParams(location.search).get('db') || '');
+    $('storeNote').textContent = durable ? 'Rooms are kept. Play at your own pace, hours or days apart.' : 'Rooms live 12 hours on the public relay. For slower games, set the database address at the top of the file.';
     $('netMsg').textContent = NET.room ? `You are in room ${NET.room}. Leave it first to start another.` : (onWeb() ? '' : '1v1 needs the page on a web address, for example the GitHub Pages link. It does not work from a file or inside a preview.');
     $('createBtn').disabled = $('joinBtn').disabled = !!NET.room;
     $('netOverlay').classList.add('on');

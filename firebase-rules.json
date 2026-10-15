@@ -1,0 +1,17 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        "events": {
+          ".read": "$room.matches(/^[A-Z0-9]{6}$/)",
+          "$id": {
+            ".write": "$room.matches(/^[A-Z0-9]{6}$/) && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['t', 'by']) && newData.child('t').isString() && newData.child('t').val().length <= 10 && newData.child('by').isString() && newData.child('by').val().length <= 24"
+          }
+        }
+      }
+    }
+  }
+}
