@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#121a20">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Wave Mine">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <meta name="description" content="A deduction puzzle: send waves into a mine and find five hidden gems. Solo or 1v1.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -1413,6 +1416,12 @@ if (typeof module !== 'undefined') module.exports = Engine;
     span.innerHTML = `<i style="${hex ? 'background:' + hex : 'border-style:dashed'}"></i>${name}`;
     sw.appendChild(span);
   }
+  // Installable app: register the service worker on a real web address only (not from a file, not inside a preview).
+  try {
+    if ('serviceWorker' in navigator && window.top === window && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
+    }
+  } catch (e) { /* ignore */ }
   const hash = location.hash || '';
   const mm = hash.match(/mine=(\d{1,10})/), rm = hash.match(/room=([A-Za-z0-9]{6})/);
   const first = mm ? parseInt(mm[1], 10) : 0;
