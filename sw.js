@@ -1,7 +1,7 @@
 // Wave Mine service worker: keeps the game playable offline and makes it installable.
 // Same-origin files only. The 1v1 relay, Google Fonts and anything cross-origin go straight to the network.
-const VERSION = 'wavemine-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
+const VERSION = 'wavemine-v2';
+const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -18,14 +18,15 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
   const isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
-  if (isPage) {
+  const isConfig = url.pathname.endsWith('/config.js');
+  if (isPage || isConfig) {
     // Network first, so a new index.html reaches players as soon as it is online. Cache when offline.
     event.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
-        caches.open(VERSION).then(cache => cache.put('./index.html', copy));
+        caches.open(VERSION).then(cache => cache.put(isConfig ? './config.js' : './index.html', copy));
         return res;
-      }).catch(() => caches.match('./index.html'))
+      }).catch(() => caches.match(isConfig ? './config.js' : './index.html'))
     );
     return;
   }

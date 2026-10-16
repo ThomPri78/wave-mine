@@ -63,6 +63,15 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
 .net .text b { font-size: 19px; letter-spacing: .06em; }
 .net .row { margin-top: 8px; }
 .net .row .btn { padding: 8px 6px; font-size: 15px; }
+.chat { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.chatList { list-style: none; margin: 0 0 8px; padding: 0; max-height: 180px; overflow: auto; font-size: 15px; }
+.chatList li { padding: 3px 0; word-break: break-word; }
+.chatList .who { color: var(--muted); }
+.chatList .when { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.chatList .me .who { color: var(--lamp); }
+.chat .row { margin-top: 0; }
+.chat .row .field { flex: 1; min-width: 0; }
+.chat .row .btn { flex: none; }
 
 .stats { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 15px; color: var(--muted); margin: 4px 0 8px; }
 .stats span { white-space: nowrap; }
@@ -171,6 +180,10 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
   <div class="net" id="net" hidden>
     <div class="line"><span class="dot" id="netDot"></span><div class="text" id="netText"></div></div>
     <div class="row" id="netBtns"></div>
+    <div class="chat" id="chat" hidden>
+      <ol class="chatList" id="chatList"></ol>
+      <div class="row"><input class="field" id="chatField" placeholder="Message" maxlength="200" autocomplete="off" aria-label="Message"><button class="btn" id="chatSend">Send</button></div>
+    </div>
   </div>
   <div class="seg" id="viewSeg" hidden>
     <button id="viewHunt" aria-pressed="true">Their mine</button>
@@ -282,6 +295,7 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
   </div>
 </div>
 
+<script src="./config.js"></script>
 <script>
 const Engine = (() => {
   const W = 10, H = 8;
@@ -576,11 +590,10 @@ if (typeof module !== 'undefined') module.exports = Engine;
 <script>
 (() => {
   // ===== 1v1 storage =====
-  // Paste your Firebase Realtime Database URL between the quotes, for example
-  // 'https://wave-mine-default-rtdb.europe-west1.firebasedatabase.app'. Rooms are then kept, and players can
-  // take turns hours or days apart. Leave it empty to use the public ntfy.sh relay instead: free, no setup,
-  // but a room lives only 12 hours.
-  const DB_URL = 'https://wave-mine-db-default-rtdb.europe-west1.firebasedatabase.app/';
+  // The Firebase Realtime Database address comes from config.js next to this file (window.WAVEMINE_DB), so
+  // a new index.html never overwrites it. Rooms are then kept, and players can take turns hours or days apart.
+  // With no address, the public ntfy.sh relay is used: free, no setup, but a room lives only 12 hours.
+  const DB_URL = (typeof window.WAVEMINE_DB === 'string' ? window.WAVEMINE_DB.trim() : '');
   const E = Engine;
   const W = E.W, H = E.H, OX = 1, OY = 1;
   const NS = 'http://www.w3.org/2000/svg';
@@ -1153,7 +1166,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
   // ---------- 1v1: room state ----------
   // The room's event log is the only source of truth. Each phone rebuilds the match from it, so arrival order
   // and lost connections do not matter: one action per turn number, and only the player whose turn it is counts.
-  const NET = { room: null, tr: null, me: null, name: '', seen: new Set(), events: [], host: null, guest: null, m: 1, match: null, status: 'offline', left: null, msg: '', endShown: 0, view: 'hunt', guess: null, setup: null, guessFor: 0 };
+  const NET = { room: null, tr: null, me: null, name: '', seen: new Set(), events: [], host: null, guest: null, m: 1, match: null, status: 'offline', left: null, msg: '', endShown: 0, view: 'hunt', guess: null, setup: null, guessFor: 0, chats: [], chatOpen: false, chatSeen: 0 };
   const myId = () => { let id = store.get(CID_KEY); if (!id) { id = randId(); store.set(CID_KEY, id); } return id; };
   const oppName = () => { if (!NET.host || !NET.guest) return 'Opponent'; return (NET.host.id === NET.me ? NET.guest : NET.host).name; };
   const nameOf = id => NET.host && NET.host.id === id ? NET.host.name : NET.guest && NET.guest.id === id ? NET.guest.name : '?';
@@ -1180,7 +1193,8 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function netSend(ev) {
     if (!NET.tr) return Promise.resolve(false);
     return NET.tr.send({ ...ev, by: NET.me }).then(ok => {
-      if (ok && PING_TEXT[ev.t]) pingOpponent(`${NET.name} ${PING_TEXT[ev.t]} Room ${NET.room}.`);
+      if (ok && ev.t === 'chat') pingOpponent(`${NET.name}: ${String(ev.text).replace(/\s+/g, ' ').slice(0, 160)}`);
+      else if (ok && PING_TEXT[ev.t]) pingOpponent(`${NET.name} ${PING_TEXT[ev.t]} Room ${NET.room}.`);
       return ok;
     });
   }
@@ -1206,7 +1220,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     scheduleNetRender();
   }
   function rebuild() {
-    NET.host = null; NET.guest = null; NET.m = 1; NET.left = null; NET.match = null;
+    NET.host = null; NET.guest = null; NET.m = 1; NET.left = null; NET.match = null; NET.chats = [];
     const evs = NET.events;
     const h = evs.find(e => e.t === 'host');
     if (!h) return;
@@ -1216,6 +1230,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     if (j) NET.guest = { id: j.by, name: String(j.name || 'Guest').slice(0, 12), ping: cleanTopic(j.ping) };
     for (const e of evs) if (e.t === 'rematch' && Number.isInteger(e.m) && e.m > NET.m && e.m < 1000 && isPlayer(e.by)) NET.m = e.m;
     for (const e of evs) if (e.t === 'leave' && e.by !== NET.me && isPlayer(e.by)) NET.left = e.by;
+    NET.chats = evs.filter(e => e.t === 'chat' && isPlayer(e.by) && typeof e.text === 'string' && e.text.trim()).map(e => ({ by: e.by, text: e.text.trim().slice(0, 200), at: Number.isFinite(e.at) ? e.at : 0 }));
     if (!NET.guest) return;
     NET.match = buildMatch(NET.m);
   }
@@ -1281,7 +1296,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function joinRoom(room, name, create) {
     leaveRoom(true);
     NET.room = room; NET.name = name; NET.me = myId();
-    NET.seen = new Set(); NET.events = []; NET.host = null; NET.guest = null; NET.m = 1; NET.match = null; NET.left = null; NET.msg = ''; NET.status = 'connecting'; NET.endShown = 0; NET.view = 'hunt'; NET.guessFor = 0;
+    NET.seen = new Set(); NET.events = []; NET.host = null; NET.guest = null; NET.m = 1; NET.match = null; NET.left = null; NET.msg = ''; NET.status = 'connecting'; NET.endShown = 0; NET.view = 'hunt'; NET.guessFor = 0; NET.chats = []; NET.chatOpen = false; NET.chatSeen = parseInt(store.get('wavemine-chatseen-' + room) || '0', 10) || 0;
     store.set(NAME_KEY, name); store.set(ROOM_KEY, room);
     const q = new URLSearchParams(location.search);
     const dbUrl = /^https?:\/\//.test(q.get('db') || '') ? q.get('db') : (/^https?:\/\//.test(DB_URL) ? DB_URL : '');
@@ -1408,10 +1423,49 @@ if (typeof module !== 'undefined') module.exports = Engine;
     if (NET.status === 'reconnecting') text += ' Reconnecting…';
     if (NET.msg) text += ' ' + esc(NET.msg);
     $('netText').innerHTML = text;
+    if (NET.host && NET.guest) {
+      const unread = NET.chats.slice(NET.chatSeen).filter(c => c.by !== NET.me).length;
+      btns.push([NET.chatOpen ? 'Hide chat' : unread ? `Chat (${unread})` : 'Chat', () => { NET.chatOpen = !NET.chatOpen; renderNet(); if (NET.chatOpen) $('chatField').focus(); }]);
+    }
     btns.push(['Leave', () => askConfirm('Leave this room?', () => leaveRoom(false))]);
     const row = $('netBtns');
     row.innerHTML = '';
-    for (const [label, fn] of btns) { const b = document.createElement('button'); b.className = 'btn' + (label === 'Leave' ? ' quiet' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); }
+    for (const [label, fn] of btns) { const b = document.createElement('button'); b.className = 'btn' + (label === 'Leave' || label.startsWith('Hide') ? ' quiet' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); }
+    renderChat();
+  }
+  function ago(at) {
+    if (!at) return '';
+    const s = Math.max(0, (Date.now() - at) / 1000);
+    if (s < 60) return 'now';
+    if (s < 3600) return Math.floor(s / 60) + ' min';
+    if (s < 86400) return Math.floor(s / 3600) + ' h';
+    return Math.floor(s / 86400) + ' d';
+  }
+  function renderChat() {
+    const box = $('chat');
+    box.hidden = !(NET.room && NET.chatOpen && NET.host && NET.guest);
+    if (box.hidden) return;
+    const ol = $('chatList');
+    ol.innerHTML = '';
+    const list = NET.chats.slice(-60);
+    if (!list.length) { const li = document.createElement('li'); li.className = 'who'; li.textContent = 'No messages yet.'; ol.appendChild(li); }
+    for (const c of list) {
+      const li = document.createElement('li');
+      if (c.by === NET.me) li.className = 'me';
+      li.innerHTML = `<span class="who"></span> <span class="txt"></span><span class="when">${esc(ago(c.at))}</span>`;
+      li.querySelector('.who').textContent = (c.by === NET.me ? 'You' : nameOf(c.by)) + ':';
+      li.querySelector('.txt').textContent = c.text;
+      ol.appendChild(li);
+    }
+    ol.scrollTop = ol.scrollHeight;
+    if (NET.chatSeen !== NET.chats.length) { NET.chatSeen = NET.chats.length; store.set('wavemine-chatseen-' + NET.room, String(NET.chatSeen)); }
+  }
+  function sendChat() {
+    const field = $('chatField');
+    const text = field.value.trim().slice(0, 200);
+    if (!text || !NET.room) return;
+    field.value = '';
+    netSend({ t: 'chat', text, at: Date.now() });
   }
   function shareRoom() {
     const url = onWeb() ? location.href.split('#')[0] + '#room=' + NET.room : '';
@@ -1480,6 +1534,8 @@ if (typeof module !== 'undefined') module.exports = Engine;
   $('codeField').addEventListener('keydown', ev => { if (ev.key === 'Enter') $('joinBtn').click(); });
   $('leaveBtn2').onclick = () => leaveRoom(false);
   $('rematchBtn').onclick = () => { $('endOverlay').classList.remove('on'); netSend({ t: 'rematch', m: NET.m + 1 }); };
+  $('chatSend').onclick = sendChat;
+  $('chatField').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); sendChat(); } });
   // colour legend in help
   const sw = $('swatches');
   for (const name in E.HEX) {
