@@ -289,7 +289,7 @@ h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.1; }
     <div class="swatches" id="swatches"></div>
     <p class="sub">Placement rules: gem corners sit on grid points. Two gems never share an edge. Every gem is visible from at least one edge. The two white gems are not mirror images of each other.</p>
     <p class="sub">1v1: create a room and share the code. Each player hides five gems, then you take turns hunting in the other player's mine. Switch between "Their mine" and "Your mine" to see your questions or theirs. The first correct answer wins. A wrong check costs one of your two checks. Give up and your opponent wins. You do not need to be online at the same time: close the game, come back later, open the link and tap Join. Anyone with the room code can read the room, so keep the code between you.</p>
-    <p class="sub">Turn alerts: install the free ntfy app, subscribe to a topic name of your own, for example wm-ana-7f3k, and type that name in the 1v1 screen. Your opponent's phone sends you a notification after each of their moves.</p>
+    <p class="sub">Turn alerts: in the room card, tap Alerts and allow notifications. Your phone then gets a notification after each of your opponent's moves and messages, even with the game closed. On iPhone this works for the home-screen version only. Without push alerts, the ntfy app route still works: subscribe to a topic name of your own in the free ntfy app and type it in the 1v1 screen.</p>
     <p class="sub" id="fontInfo"></p>
     <div class="row"><button class="btn" id="helpClose">Close</button></div>
   </div>
@@ -594,6 +594,9 @@ if (typeof module !== 'undefined') module.exports = Engine;
   // a new index.html never overwrites it. Rooms are then kept, and players can take turns hours or days apart.
   // With no address, the public ntfy.sh relay is used: free, no setup, but a room lives only 12 hours.
   const DB_URL = (typeof window.WAVEMINE_DB === 'string' ? window.WAVEMINE_DB.trim() : '');
+  // Turn alerts: the address of the Cloudflare Worker (config.js, window.WAVEMINE_PUSH). Empty = no push alerts.
+  const PUSH_URL = (typeof window.WAVEMINE_PUSH === 'string' ? window.WAVEMINE_PUSH.trim().replace(/\/$/, '') : '');
+  const pushSupported = () => !!PUSH_URL && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && onWeb();
   const E = Engine;
   const W = E.W, H = E.H, OX = 1, OY = 1;
   const NS = 'http://www.w3.org/2000/svg';
@@ -606,7 +609,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     return e;
   };
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const NAME_KEY = 'wavemine-name', CID_KEY = 'wavemine-cid', ROOM_KEY = 'wavemine-room', PING_KEY = 'wavemine-ping';
+  const NAME_KEY = 'wavemine-name', CID_KEY = 'wavemine-cid', ROOM_KEY = 'wavemine-room', PING_KEY = 'wavemine-ping', ALERT_KEY = 'wavemine-alerts';
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } },
@@ -1166,7 +1169,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
   // ---------- 1v1: room state ----------
   // The room's event log is the only source of truth. Each phone rebuilds the match from it, so arrival order
   // and lost connections do not matter: one action per turn number, and only the player whose turn it is counts.
-  const NET = { room: null, tr: null, me: null, name: '', seen: new Set(), events: [], host: null, guest: null, m: 1, match: null, status: 'offline', left: null, msg: '', endShown: 0, view: 'hunt', guess: null, setup: null, guessFor: 0, chats: [], chatOpen: false, chatSeen: 0 };
+  const NET = { room: null, tr: null, me: null, name: '', seen: new Set(), events: [], host: null, guest: null, m: 1, match: null, status: 'offline', left: null, msg: '', endShown: 0, view: 'hunt', guess: null, setup: null, guessFor: 0, chats: [], chatOpen: false, chatSeen: 0, subs: {}, dbUrl: '', metaKey: '' };
   const myId = () => { let id = store.get(CID_KEY); if (!id) { id = randId(); store.set(CID_KEY, id); } return id; };
   const oppName = () => { if (!NET.host || !NET.guest) return 'Opponent'; return (NET.host.id === NET.me ? NET.guest : NET.host).name; };
   const nameOf = id => NET.host && NET.host.id === id ? NET.host.name : NET.guest && NET.guest.id === id ? NET.guest.name : '?';
@@ -1183,7 +1186,9 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function pingOpponent(text) {
     try {
       const opp = NET.host && NET.host.id !== NET.me ? NET.host : NET.guest && NET.guest.id !== NET.me ? NET.guest : null;
-      if (!opp || !opp.ping) return;
+      if (!opp) return;
+      if (PUSH_URL && NET.subs[opp.id]) fetch(PUSH_URL + '/push', { method: 'POST', body: JSON.stringify({ endpoint: NET.subs[opp.id] }), headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+      if (!opp.ping) return;
       const url = onWeb() ? location.href.split('#')[0] + '#room=' + NET.room : '';
       const qs = '?title=' + encodeURIComponent('Wave Mine') + '&tags=gem' + (url ? '&click=' + encodeURIComponent(url) : '');
       fetch(RELAY + '/' + opp.ping + qs, { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
@@ -1220,7 +1225,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     scheduleNetRender();
   }
   function rebuild() {
-    NET.host = null; NET.guest = null; NET.m = 1; NET.left = null; NET.match = null; NET.chats = [];
+    NET.host = null; NET.guest = null; NET.m = 1; NET.left = null; NET.match = null; NET.chats = []; NET.subs = {};
     const evs = NET.events;
     const h = evs.find(e => e.t === 'host');
     if (!h) return;
@@ -1231,6 +1236,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     for (const e of evs) if (e.t === 'rematch' && Number.isInteger(e.m) && e.m > NET.m && e.m < 1000 && isPlayer(e.by)) NET.m = e.m;
     for (const e of evs) if (e.t === 'leave' && e.by !== NET.me && isPlayer(e.by)) NET.left = e.by;
     NET.chats = evs.filter(e => e.t === 'chat' && isPlayer(e.by) && typeof e.text === 'string' && e.text.trim()).map(e => ({ by: e.by, text: e.text.trim().slice(0, 200), at: Number.isFinite(e.at) ? e.at : 0 }));
+    for (const e of evs) if (e.t === 'sub' && isPlayer(e.by)) NET.subs[e.by] = typeof e.endpoint === 'string' && e.endpoint.startsWith('https://') ? e.endpoint : '';
     if (!NET.guest) return;
     NET.match = buildMatch(NET.m);
   }
@@ -1303,10 +1309,14 @@ if (typeof module !== 'undefined') module.exports = Engine;
     NET.tr = q.get('transport') === 'local' ? localTransport(room, onRecord, onStatus)
       : dbUrl ? firebaseTransport(dbUrl, room, onRecord, onStatus)
       : ntfyTransport(room, onRecord, onStatus);
+    NET.dbUrl = dbUrl;
     setHash('#room=' + room);
-    const ping = cleanTopic($('pingField').value);
+    const ping = cleanTopic($('netOverlay').classList.contains('on') ? $('pingField').value : (store.get(PING_KEY) || ''));
     store.set(PING_KEY, ping);
-    NET.tr.send({ t: create ? 'host' : 'join', name, by: NET.me, ping });
+    NET.tr.send({ t: create ? 'host' : 'join', name, by: NET.me, ping }).then(() => {
+      if (store.get(ALERT_KEY) === '1' && pushSupported()) currentSubscription().then(sub => { if (sub) netSend({ t: 'sub', endpoint: sub.endpoint }); });
+    });
+    writeMeta();
     if (!create) setTimeout(() => { if (NET.room === room && !NET.host) { NET.msg = 'No room with this code yet. Check the code with your friend.'; renderNet(); } }, 7000);
     $('netOverlay').classList.remove('on');
     newGameFrom(null, { locked: true });
@@ -1423,6 +1433,11 @@ if (typeof module !== 'undefined') module.exports = Engine;
     if (NET.status === 'reconnecting') text += ' Reconnecting…';
     if (NET.msg) text += ' ' + esc(NET.msg);
     $('netText').innerHTML = text;
+    writeMeta();
+    if (pushSupported() && (NET.host && (NET.host.id === NET.me || (NET.guest && NET.guest.id === NET.me)))) {
+      const on = store.get(ALERT_KEY) === '1' && !!NET.subs[NET.me];
+      btns.push([on ? 'Alerts: on' : 'Alerts', () => on ? askConfirm('Turn alerts off on this phone?', disableAlerts) : enableAlerts()]);
+    }
     if (NET.host && NET.guest) {
       const unread = NET.chats.slice(NET.chatSeen).filter(c => c.by !== NET.me).length;
       btns.push([NET.chatOpen ? 'Hide chat' : unread ? `Chat (${unread})` : 'Chat', () => { NET.chatOpen = !NET.chatOpen; renderNet(); if (NET.chatOpen) $('chatField').focus(); }]);
@@ -1430,7 +1445,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     btns.push(['Leave', () => askConfirm('Leave this room?', () => leaveRoom(false))]);
     const row = $('netBtns');
     row.innerHTML = '';
-    for (const [label, fn] of btns) { const b = document.createElement('button'); b.className = 'btn' + (label === 'Leave' || label.startsWith('Hide') ? ' quiet' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); }
+    for (const [label, fn] of btns) { const b = document.createElement('button'); b.className = 'btn' + (label === 'Leave' || label.startsWith('Hide') || label.startsWith('Alerts:') ? ' quiet' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); }
     renderChat();
   }
   function ago(at) {
@@ -1460,6 +1475,48 @@ if (typeof module !== 'undefined') module.exports = Engine;
     ol.scrollTop = ol.scrollHeight;
     if (NET.chatSeen !== NET.chats.length) { NET.chatSeen = NET.chats.length; store.set('wavemine-chatseen-' + NET.room, String(NET.chatSeen)); }
   }
+  // ---- turn alerts on this phone (Web Push through the Cloudflare Worker) ----
+  const urlB64ToU8 = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); s += '='.repeat((4 - s.length % 4) % 4); return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+  async function currentSubscription() {
+    try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (e) { return null; }
+  }
+  // What the service worker needs when a push wakes it: where the room lives and who the opponent is.
+  function writeMeta() {
+    try {
+      if (!('caches' in window) || !NET.room) return;
+      const meta = { db: NET.dbUrl || '', room: NET.room, me: NET.me, opp: NET.host && NET.guest ? oppName() : '' };
+      const key = JSON.stringify(meta);
+      if (key === NET.metaKey) return;
+      NET.metaKey = key;
+      caches.open('wavemine-meta').then(c => c.put('./_meta', new Response(key, { headers: { 'Content-Type': 'application/json' } }))).catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
+  async function enableAlerts() {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { NET.msg = 'Notifications are blocked for this site in the phone settings.'; renderNet(); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const res = await fetch(PUSH_URL + '/key');
+      const key = (await res.json()).key;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(key) }); }
+        catch (e) { const old = await reg.pushManager.getSubscription(); if (old) await old.unsubscribe(); sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(key) }); }
+      }
+      store.set(ALERT_KEY, '1');
+      writeMeta();
+      await netSend({ t: 'sub', endpoint: sub.endpoint });
+      NET.msg = 'Alerts are on for this phone.';
+    } catch (e) { NET.msg = 'Could not turn alerts on: ' + (e && e.message ? e.message : String(e)); }
+    renderNet();
+  }
+  async function disableAlerts() {
+    try { const sub = await currentSubscription(); if (sub) await sub.unsubscribe(); } catch (e) { /* ignore */ }
+    store.del(ALERT_KEY);
+    await netSend({ t: 'sub', endpoint: '' });
+    NET.msg = 'Alerts are off for this phone.';
+    renderNet();
+  }
   function sendChat() {
     const field = $('chatField');
     const text = field.value.trim().slice(0, 200);
@@ -1479,7 +1536,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     $('pingField').value = store.get(PING_KEY) || '';
     $('codeField').value = prefillCode || '';
     const durable = /^https?:\/\//.test(DB_URL) || /^https?:\/\//.test(new URLSearchParams(location.search).get('db') || '');
-    $('storeNote').textContent = durable ? 'Rooms are kept. Play at your own pace, hours or days apart.' : 'Rooms live 12 hours on the public relay. For slower games, set the database address at the top of the file.';
+    $('storeNote').textContent = (durable ? 'Rooms are kept. Play at your own pace, hours or days apart.' : 'Rooms live 12 hours on the public relay. For slower games, set the database address in config.js.') + (pushSupported() ? ' Push alerts: tap Alerts in the room card after you join.' : '');
     $('netMsg').textContent = NET.room ? `You are in room ${NET.room}. Leave it first to start another.` : (onWeb() ? '' : '1v1 needs the page on a web address, for example the GitHub Pages link. It does not work from a file or inside a preview.');
     $('createBtn').disabled = $('joinBtn').disabled = !!NET.room;
     $('netOverlay').classList.add('on');
@@ -1554,7 +1611,8 @@ if (typeof module !== 'undefined') module.exports = Engine;
   const mm = hash.match(/mine=(\d{1,10})/), rm = hash.match(/room=([A-Za-z0-9]{6})/);
   const first = mm ? parseInt(mm[1], 10) : 0;
   newGame(first > 0 && first <= 2147483647 ? first : randomSeed());
-  if (rm) openLobby(cleanCode(rm[1]));
+  if (rm && cleanCode(rm[1]) === store.get(ROOM_KEY) && store.get(NAME_KEY)) joinRoom(cleanCode(rm[1]), store.get(NAME_KEY), false);
+  else if (rm) openLobby(cleanCode(rm[1]));
   else if (store.get(ROOM_KEY)) openLobby(cleanCode(store.get(ROOM_KEY)));
 })();
 </script>
